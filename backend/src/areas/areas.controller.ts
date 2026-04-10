@@ -9,7 +9,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles } from '../autenticacion/decoradores/roles.decorator';
 import { AreasService } from './areas.service';
 import { CreateAreaDto } from './dto/create-area.dto';
 import { UpdateAreaDto } from './dto/update-area.dto';

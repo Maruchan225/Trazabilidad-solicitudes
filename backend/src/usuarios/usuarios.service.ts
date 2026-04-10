@@ -1,13 +1,30 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { compare, hash } from 'bcrypt';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { handlePrismaError } from '../common/prisma-error.util';
+import { handlePrismaError } from '../comun/prisma-error.util';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
+import { FiltroUsuariosDto } from './dto/filtro-usuarios.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 
 @Injectable()
 export class UsuariosService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private mapearUsuarioConTotales<
+    T extends {
+      _count?: {
+        solicitudesAsignadas?: number;
+      };
+    },
+  >(usuario: T) {
+    const { _count, ...resto } = usuario;
+
+    return {
+      ...resto,
+      totalSolicitudes: _count?.solicitudesAsignadas ?? 0,
+    };
+  }
 
   async crear(createUsuarioDto: CreateUsuarioDto) {
     await this.asegurarExistenciaArea(createUsuarioDto.areaId);
@@ -17,33 +34,49 @@ export class UsuariosService {
         createUsuarioDto.contrasena,
       );
 
-      return await this.prisma.usuario.create({
+      const usuario = await this.prisma.usuario.create({
         data: {
           ...createUsuarioDto,
           contrasena: contrasenaHasheada,
         },
         include: {
           area: true,
+          _count: {
+            select: {
+              solicitudesAsignadas: true,
+            },
+          },
         },
         omit: {
           contrasena: true,
         },
       });
+
+      return this.mapearUsuarioConTotales(usuario);
     } catch (error) {
       handlePrismaError(error, 'usuario');
     }
   }
 
-  listar() {
-    return this.prisma.usuario.findMany({
+  async listar(filtros: FiltroUsuariosDto) {
+    const where = this.construirWhere(filtros);
+    const usuarios = await this.prisma.usuario.findMany({
+      where,
       omit: {
         contrasena: true,
       },
       include: {
         area: true,
+        _count: {
+          select: {
+            solicitudesAsignadas: true,
+          },
+        },
       },
       orderBy: [{ apellidos: 'asc' }, { nombres: 'asc' }],
     });
+
+    return usuarios.map((usuario) => this.mapearUsuarioConTotales(usuario));
   }
 
   async obtenerPorId(id: number) {
@@ -54,6 +87,11 @@ export class UsuariosService {
       },
       include: {
         area: true,
+        _count: {
+          select: {
+            solicitudesAsignadas: true,
+          },
+        },
       },
     });
 
@@ -61,7 +99,7 @@ export class UsuariosService {
       throw new NotFoundException(`Usuario con id ${id} no encontrado`);
     }
 
-    return user;
+    return this.mapearUsuarioConTotales(user);
   }
 
   async actualizar(id: number, updateUsuarioDto: UpdateUsuarioDto) {
@@ -79,16 +117,23 @@ export class UsuariosService {
           }
         : updateUsuarioDto;
 
-      return await this.prisma.usuario.update({
+      const usuario = await this.prisma.usuario.update({
         where: { id },
         data,
         include: {
           area: true,
+          _count: {
+            select: {
+              solicitudesAsignadas: true,
+            },
+          },
         },
         omit: {
           contrasena: true,
         },
       });
+
+      return this.mapearUsuarioConTotales(usuario);
     } catch (error) {
       handlePrismaError(error, 'usuario');
     }
@@ -134,5 +179,37 @@ export class UsuariosService {
     if (!area) {
       throw new NotFoundException(`Area con id ${areaId} no encontrada`);
     }
+  }
+
+  private construirWhere(filtros: FiltroUsuariosDto): Prisma.UsuarioWhereInput {
+    const busqueda = filtros.busqueda?.trim();
+    const rolesCoincidentes = ['ENCARGADO', 'REEMPLAZO', 'TRABAJADOR'].filter(
+      (rol) => rol.toLowerCase().includes(busqueda?.toLowerCase() ?? ''),
+    );
+
+    return {
+      ...(filtros.rol ? { rol: filtros.rol } : {}),
+      ...(filtros.areaId ? { areaId: filtros.areaId } : {}),
+      ...(typeof filtros.activo === 'boolean'
+        ? { activo: filtros.activo }
+        : {}),
+      ...(busqueda
+        ? {
+            OR: [
+              { nombres: { contains: busqueda, mode: 'insensitive' } },
+              { apellidos: { contains: busqueda, mode: 'insensitive' } },
+              { email: { contains: busqueda, mode: 'insensitive' } },
+              ...(rolesCoincidentes.length > 0
+                ? [{ rol: { in: rolesCoincidentes as never[] } }]
+                : []),
+              {
+                area: {
+                  nombre: { contains: busqueda, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
   }
 }

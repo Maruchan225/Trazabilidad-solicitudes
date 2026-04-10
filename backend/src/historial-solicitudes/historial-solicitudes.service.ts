@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
-import { UsuarioToken } from '../auth/interfaces/usuario-token.interface';
+import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()

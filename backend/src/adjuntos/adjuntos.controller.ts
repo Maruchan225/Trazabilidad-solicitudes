@@ -11,10 +11,10 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RolUsuario } from '@prisma/client';
 import type { Express } from 'express';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { UsuarioAutenticado } from '../auth/decorators/usuario-autenticado.decorator';
-import type { UsuarioToken } from '../auth/interfaces/usuario-token.interface';
-import { opcionesMulterAdjuntos } from './config/adjuntos-multer.config';
+import { Roles } from '../autenticacion/decoradores/roles.decorator';
+import { UsuarioAutenticado } from '../autenticacion/decoradores/usuario-autenticado.decorator';
+import type { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
+import { opcionesMulterAdjuntos } from './configuracion/adjuntos-multer.config';
 import { AdjuntosService } from './adjuntos.service';
 
 @Controller('adjuntos')

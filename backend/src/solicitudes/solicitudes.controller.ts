@@ -6,17 +6,19 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { UsuarioAutenticado } from '../auth/decorators/usuario-autenticado.decorator';
-import type { UsuarioToken } from '../auth/interfaces/usuario-token.interface';
+import { Roles } from '../autenticacion/decoradores/roles.decorator';
+import { UsuarioAutenticado } from '../autenticacion/decoradores/usuario-autenticado.decorator';
+import type { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { AgregarObservacionSolicitudDto } from './dto/agregar-observacion-solicitud.dto';
 import { AsignarSolicitudDto } from './dto/asignar-solicitud.dto';
 import { CambiarEstadoSolicitudDto } from './dto/cambiar-estado-solicitud.dto';
 import { CerrarSolicitudDto } from './dto/cerrar-solicitud.dto';
 import { CreateSolicitudDto } from './dto/create-solicitud.dto';
 import { DerivarSolicitudDto } from './dto/derivar-solicitud.dto';
+import { FiltroSolicitudesDto } from './dto/filtro-solicitudes.dto';
 import { FinalizarSolicitudDto } from './dto/finalizar-solicitud.dto';
 import { SolicitudesService } from './solicitudes.service';
 
@@ -35,8 +37,11 @@ export class SolicitudesController {
 
   @Get()
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO, RolUsuario.TRABAJADOR)
-  listar(@UsuarioAutenticado() usuario: UsuarioToken) {
-    return this.solicitudesService.listar(usuario);
+  listar(
+    @UsuarioAutenticado() usuario: UsuarioToken,
+    @Query() filtros: FiltroSolicitudesDto,
+  ) {
+    return this.solicitudesService.listar(usuario, filtros);
   }
 
   @Get(':id')

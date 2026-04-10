@@ -10,8 +10,8 @@ import {
   Prisma,
   RolUsuario,
 } from '@prisma/client';
-import { UsuarioToken } from '../auth/interfaces/usuario-token.interface';
-import { handlePrismaError } from '../common/prisma-error.util';
+import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
+import { handlePrismaError } from '../comun/prisma-error.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AgregarObservacionSolicitudDto } from './dto/agregar-observacion-solicitud.dto';
 import { AsignarSolicitudDto } from './dto/asignar-solicitud.dto';
@@ -19,6 +19,7 @@ import { CambiarEstadoSolicitudDto } from './dto/cambiar-estado-solicitud.dto';
 import { CerrarSolicitudDto } from './dto/cerrar-solicitud.dto';
 import { CreateSolicitudDto } from './dto/create-solicitud.dto';
 import { DerivarSolicitudDto } from './dto/derivar-solicitud.dto';
+import { FiltroSolicitudesDto } from './dto/filtro-solicitudes.dto';
 import { FinalizarSolicitudDto } from './dto/finalizar-solicitud.dto';
 
 const ACTIVE_REQUEST_WHERE = {
@@ -120,13 +121,14 @@ export class SolicitudesService {
     }
   }
 
-  async listar(usuario: UsuarioToken) {
+  async listar(usuario: UsuarioToken, filtros: FiltroSolicitudesDto) {
     await this.asegurarUsuarioActivoExiste(usuario.id);
 
     const solicitudes = await this.prisma.solicitud.findMany({
       where: {
         ...ACTIVE_REQUEST_WHERE,
         ...this.construirFiltroVisibilidad(usuario),
+        ...this.construirFiltroConsulta(filtros),
       },
       include: SOLICITUD_INCLUDE,
       orderBy: [{ creadoEn: 'desc' }],
@@ -167,7 +169,14 @@ export class SolicitudesService {
       throw new NotFoundException(`Solicitud con id ${id} no encontrada`);
     }
 
-    return this.presentarSolicitud(solicitud);
+    const historialEnriquecido = await this.enriquecerHistorialAsignaciones(
+      solicitud.historialEntradas,
+    );
+
+    return this.presentarSolicitud({
+      ...solicitud,
+      historialEntradas: historialEnriquecido,
+    });
   }
 
   async asignarSolicitud(
@@ -281,6 +290,12 @@ export class SolicitudesService {
     if (cambiarEstadoSolicitudDto.estado === EstadoSolicitud.VENCIDA) {
       throw new BadRequestException(
         'El estado VENCIDA se determina automaticamente segun la fecha de vencimiento',
+      );
+    }
+
+    if (cambiarEstadoSolicitudDto.estado === EstadoSolicitud.DERIVADA) {
+      throw new BadRequestException(
+        'Use el metodo derivarSolicitudAArea para derivar solicitudes',
       );
     }
 
@@ -538,6 +553,59 @@ export class SolicitudesService {
     return {};
   }
 
+  private construirFiltroConsulta(
+    filtros: FiltroSolicitudesDto,
+  ): Prisma.SolicitudWhereInput {
+    const busqueda = filtros.busqueda?.trim();
+    const filtraVencidas = filtros.estado === EstadoSolicitud.VENCIDA;
+
+    return {
+      ...(filtros.estado && !filtraVencidas ? { estado: filtros.estado } : {}),
+      ...(filtros.prioridad ? { prioridad: filtros.prioridad } : {}),
+      ...(filtros.areaId ? { areaActualId: filtros.areaId } : {}),
+      ...(filtros.tipoSolicitudId
+        ? { tipoSolicitudId: filtros.tipoSolicitudId }
+        : {}),
+      ...(filtraVencidas
+        ? {
+            fechaCierre: null,
+            fechaVencimiento: {
+              lt: new Date(),
+            },
+          }
+        : {}),
+      ...(busqueda
+        ? {
+            OR: [
+              { titulo: { contains: busqueda, mode: 'insensitive' } },
+              { descripcion: { contains: busqueda, mode: 'insensitive' } },
+              {
+                areaActual: {
+                  nombre: { contains: busqueda, mode: 'insensitive' },
+                },
+              },
+              {
+                tipoSolicitud: {
+                  nombre: { contains: busqueda, mode: 'insensitive' },
+                },
+              },
+              {
+                asignadoA: {
+                  OR: [
+                    { nombres: { contains: busqueda, mode: 'insensitive' } },
+                    { apellidos: { contains: busqueda, mode: 'insensitive' } },
+                  ],
+                },
+              },
+              ...(Number.isInteger(Number(busqueda))
+                ? [{ id: Number(busqueda) }]
+                : []),
+            ],
+          }
+        : {}),
+    };
+  }
+
   private validarTrabajadorPuedeVerSolicitud(
     solicitud: Pick<SolicitudBase, 'asignadoAId' | 'areaActualId'>,
     usuario: UsuarioToken,
@@ -608,6 +676,53 @@ export class SolicitudesService {
       estadoActual: estaVencida ? EstadoSolicitud.VENCIDA : solicitud.estado,
       estaVencida,
     };
+  }
+
+  private async enriquecerHistorialAsignaciones<
+    T extends Array<{
+      asignadoOrigenId?: number | null;
+      asignadoDestinoId?: number | null;
+    }>,
+  >(historial: T) {
+    const usuariosIds = Array.from(
+      new Set(
+        historial.flatMap((entrada) =>
+          [entrada.asignadoOrigenId, entrada.asignadoDestinoId].filter(
+            (id): id is number => typeof id === 'number',
+          ),
+        ),
+      ),
+    );
+
+    if (usuariosIds.length === 0) {
+      return historial;
+    }
+
+    const usuarios = await this.prisma.usuario.findMany({
+      where: {
+        id: {
+          in: usuariosIds,
+        },
+      },
+      include: {
+        area: true,
+      },
+      omit: {
+        contrasena: true,
+      },
+    });
+
+    const usuariosPorId = new Map(usuarios.map((item) => [item.id, item]));
+
+    return historial.map((entrada) => ({
+      ...entrada,
+      asignadoOrigen: entrada.asignadoOrigenId
+        ? (usuariosPorId.get(entrada.asignadoOrigenId) ?? null)
+        : null,
+      asignadoDestino: entrada.asignadoDestinoId
+        ? (usuariosPorId.get(entrada.asignadoDestinoId) ?? null)
+        : null,
+    }));
   }
 
   private crearEntradaHistorial(

@@ -9,7 +9,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles } from '../autenticacion/decoradores/roles.decorator';
 import { CreateTipoSolicitudDto } from './dto/create-tipo-solicitud.dto';
 import { UpdateTipoSolicitudDto } from './dto/update-tipo-solicitud.dto';
 import { TiposSolicitudService } from './tipos-solicitud.service';

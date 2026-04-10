@@ -7,8 +7,8 @@ import {
 import { AccionHistorialSolicitud, Prisma, RolUsuario } from '@prisma/client';
 import { unlink } from 'fs/promises';
 import type { Express } from 'express';
-import { UsuarioToken } from '../auth/interfaces/usuario-token.interface';
-import { handlePrismaError } from '../common/prisma-error.util';
+import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
+import { handlePrismaError } from '../comun/prisma-error.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()

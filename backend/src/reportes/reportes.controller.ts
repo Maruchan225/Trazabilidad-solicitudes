@@ -1,6 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles } from '../autenticacion/decoradores/roles.decorator';
 import { FiltroReportesDto } from './dto/filtro-reportes.dto';
 import { ReportesService } from './reportes.service';
 

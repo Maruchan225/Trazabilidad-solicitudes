@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
 import type { EstadoAplicacion } from './app.service';
-import { Publico } from './auth/decorators/publico.decorator';
+import { Publico } from './autenticacion/decoradores/publico.decorator';
 
 @Controller()
 export class AppController {

@@ -7,10 +7,12 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles } from '../autenticacion/decoradores/roles.decorator';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
+import { FiltroUsuariosDto } from './dto/filtro-usuarios.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { UsuariosService } from './usuarios.service';
 
@@ -25,8 +27,8 @@ export class UsuariosController {
   }
 
   @Get()
-  listar() {
-    return this.usuariosService.listar();
+  listar(@Query() filtros: FiltroUsuariosDto) {
+    return this.usuariosService.listar(filtros);
   }
 
   @Get(':id')

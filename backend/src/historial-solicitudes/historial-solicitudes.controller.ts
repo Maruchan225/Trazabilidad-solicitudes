@@ -1,8 +1,8 @@
 import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { UsuarioAutenticado } from '../auth/decorators/usuario-autenticado.decorator';
-import type { UsuarioToken } from '../auth/interfaces/usuario-token.interface';
+import { Roles } from '../autenticacion/decoradores/roles.decorator';
+import { UsuarioAutenticado } from '../autenticacion/decoradores/usuario-autenticado.decorator';
+import type { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { HistorialSolicitudesService } from './historial-solicitudes.service';
 
 @Controller('historial-solicitudes')

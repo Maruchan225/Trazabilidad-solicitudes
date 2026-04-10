@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { handlePrismaError } from '../common/prisma-error.util';
+import { handlePrismaError } from '../comun/prisma-error.util';
 import { CreateTipoSolicitudDto } from './dto/create-tipo-solicitud.dto';
 import { UpdateTipoSolicitudDto } from './dto/update-tipo-solicitud.dto';
 
