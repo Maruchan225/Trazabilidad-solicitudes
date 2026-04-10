@@ -1,0 +1,57 @@
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ConfigModule } from '@nestjs/config';
+import * as Joi from 'joi';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { AdjuntosModule } from './adjuntos/adjuntos.module';
+import { AreasModule } from './areas/areas.module';
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { RolesGuard } from './auth/guards/roles.guard';
+import { HistorialSolicitudesModule } from './historial-solicitudes/historial-solicitudes.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { ReportesModule } from './reportes/reportes.module';
+import { SolicitudesModule } from './solicitudes/solicitudes.module';
+import { TiposSolicitudModule } from './tipos-solicitud/tipos-solicitud.module';
+import { UsuariosModule } from './usuarios/usuarios.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+      validationSchema: Joi.object({
+        PORT: Joi.number().port().default(3000),
+        DATABASE_URL: Joi.string()
+          .pattern(/^postgres(ql)?:\/\//)
+          .required(),
+        JWT_SECRET: Joi.string().min(16).required(),
+        JWT_EXPIRES_IN: Joi.string().default('8h'),
+        FRONTEND_URL: Joi.string().default('http://localhost:5173'),
+      }),
+    }),
+    AdjuntosModule,
+    AuthModule,
+    AreasModule,
+    HistorialSolicitudesModule,
+    PrismaModule,
+    ReportesModule,
+    SolicitudesModule,
+    TiposSolicitudModule,
+    UsuariosModule,
+  ],
+  controllers: [AppController],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+  ],
+})
+export class AppModule {}

@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RolUsuario {
+  ENCARGADO
+  REEMPLAZO
+  TRABAJADOR
+}
+
+enum EstadoSolicitud {
+  INGRESADA
+  DERIVADA
+  EN_PROCESO
+  PENDIENTE_INFORMACION
+  FINALIZADA
+  CERRADA
+  VENCIDA
+}
+
+enum PrioridadSolicitud {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum AccionHistorialSolicitud {
+  CREADA
+  ASIGNADA
+  DESASIGNADA
+  DERIVADA
+  ESTADO_CAMBIADO
+  OBSERVACION
+  ADJUNTO_SUBIDO
+  ADJUNTO_ELIMINADO
+  FINALIZADA
+  CERRADA
+  ELIMINADA
+}
+
+model Area {
+  id                 Int                  @id @default(autoincrement())
+  nombre             String               @unique
+  descripcion        String?
+  activo             Boolean              @default(true)
+  creadoEn           DateTime             @default(now())
+  actualizadoEn      DateTime             @updatedAt
+  usuarios           Usuario[]
+  solicitudesActuales Solicitud[]
+  historialAreaOrigen HistorialSolicitud[] @relation("HistorialAreaOrigen")
+  historialAreaDestino HistorialSolicitud[] @relation("HistorialAreaDestino")
+
+  @@map("areas")
+}
+
+model Usuario {
+  id                    Int                  @id @default(autoincrement())
+  nombres               String
+  apellidos             String
+  email                 String               @unique
+  contrasena            String
+  telefono              String?
+  rol                   RolUsuario
+  areaId                Int
+  activo                Boolean              @default(true)
+  creadoEn              DateTime             @default(now())
+  actualizadoEn         DateTime             @updatedAt
+  area                  Area                 @relation(fields: [areaId], references: [id])
+  solicitudesCreadas    Solicitud[]          @relation("SolicitudCreadaPor")
+  solicitudesAsignadas  Solicitud[]          @relation("SolicitudAsignadaA")
+  entradasHistorial     HistorialSolicitud[] @relation("HistorialActor")
+  adjuntosSubidos       Adjunto[]
+
+  @@index([areaId])
+
+  @@map("usuarios")
+}
+
+model TipoSolicitud {
+  id             Int         @id @default(autoincrement())
+  nombre         String      @unique
+  descripcion    String?
+  diasSla        Int?
+  activo         Boolean     @default(true)
+  creadoEn       DateTime    @default(now())
+  actualizadoEn  DateTime    @updatedAt
+  solicitudes    Solicitud[]
+
+  @@map("tipos_solicitud")
+}
+
+model Solicitud {
+  id                  Int                 @id @default(autoincrement())
+  titulo              String
+  descripcion         String
+  estado              EstadoSolicitud     @default(INGRESADA)
+  prioridad           PrioridadSolicitud  @default(MEDIA)
+  creadoEn            DateTime            @default(now())
+  actualizadoEn       DateTime            @updatedAt
+  fechaVencimiento    DateTime
+  fechaCierre         DateTime?
+  eliminadoEn         DateTime?
+  creadoPorId         Int
+  asignadoAId         Int?
+  areaActualId        Int
+  tipoSolicitudId     Int
+  creadoPor           Usuario             @relation("SolicitudCreadaPor", fields: [creadoPorId], references: [id])
+  asignadoA           Usuario?            @relation("SolicitudAsignadaA", fields: [asignadoAId], references: [id])
+  areaActual          Area                @relation(fields: [areaActualId], references: [id])
+  tipoSolicitud       TipoSolicitud       @relation(fields: [tipoSolicitudId], references: [id])
+  historialEntradas   HistorialSolicitud[]
+  adjuntos            Adjunto[]
+
+  @@index([creadoPorId])
+  @@index([asignadoAId])
+  @@index([areaActualId])
+  @@index([tipoSolicitudId])
+  @@index([estado])
+  @@index([eliminadoEn])
+  @@map("solicitudes")
+}
+
+model Adjunto {
+  id              Int        @id @default(autoincrement())
+  nombreOriginal  String
+  nombreArchivo   String
+  ruta            String
+  mimeType        String
+  tamano          Int
+  creadoEn        DateTime   @default(now())
+  solicitudId     Int
+  subidoPorId     Int?
+  solicitud       Solicitud  @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  subidoPor       Usuario?   @relation(fields: [subidoPorId], references: [id], onDelete: SetNull)
+
+  @@index([solicitudId])
+  @@index([subidoPorId])
+  @@map("adjuntos")
+}
+
+model HistorialSolicitud {
+  id                    Int                      @id @default(autoincrement())
+  solicitudId           Int
+  usuarioId             Int
+  accion                AccionHistorialSolicitud
+  estadoOrigen          EstadoSolicitud?
+  estadoDestino         EstadoSolicitud?
+  areaOrigenId          Int?
+  areaDestinoId         Int?
+  asignadoOrigenId      Int?
+  asignadoDestinoId     Int?
+  comentario            String?
+  creadoEn              DateTime                 @default(now())
+  solicitud             Solicitud                @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  usuario               Usuario                  @relation("HistorialActor", fields: [usuarioId], references: [id])
+  areaOrigen            Area?                    @relation("HistorialAreaOrigen", fields: [areaOrigenId], references: [id])
+  areaDestino           Area?                    @relation("HistorialAreaDestino", fields: [areaDestinoId], references: [id])
+
+  @@index([solicitudId])
+  @@index([usuarioId])
+  @@index([areaOrigenId])
+  @@index([areaDestinoId])
+  @@map("historial_solicitudes")
+}
