@@ -1,8 +1,7 @@
-import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, message } from 'antd';
+import { Alert, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, message } from 'antd';
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useDeferredValue, useState } from 'react';
 import { FormularioUsuario } from '@/componentes/usuarios/FormularioUsuario';
-import { EstadoConsulta } from '@/componentes/ui/EstadoConsulta';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
 import { TagActivo } from '@/componentes/ui/tags/TagActivo';
 import { useAutenticacion } from '@/ganchos/useAutenticacion';
@@ -32,16 +31,17 @@ export function PaginaUsuarios() {
   const [areaFiltro, setAreaFiltro] = useState<number>();
   const [activoFiltro, setActivoFiltro] = useState<'activo' | 'inactivo'>();
   const [busqueda, setBusqueda] = useState('');
+  const busquedaDiferida = useDeferredValue(busqueda);
   const consulta = useConsulta(
     () =>
       usuariosService.listar({
-        busqueda: busqueda.trim() || undefined,
+        busqueda: busquedaDiferida.trim() || undefined,
         rol: rolFiltro,
         areaId: areaFiltro,
         activo:
           activoFiltro === undefined ? undefined : activoFiltro === 'activo',
       }),
-    [busqueda, rolFiltro, areaFiltro, activoFiltro],
+    [busquedaDiferida, rolFiltro, areaFiltro, activoFiltro],
   );
   const areas = useConsulta(() => areasService.listar(), []);
   const [form] = Form.useForm<UsuarioPayload>();
@@ -52,6 +52,14 @@ export function PaginaUsuarios() {
   const areasActivas = (areas.data ?? []).filter((area) => area.activo);
   const puedeGestionar = puedeGestionarCatalogos(sesion?.usuario.rol);
   const filtrosArea = mapearOpcionesAreas(areasActivas);
+  const hayFiltrosAplicados =
+    busqueda.trim().length > 0 ||
+    rolFiltro !== undefined ||
+    areaFiltro !== undefined ||
+    activoFiltro !== undefined;
+  const mensajeSinResultados = hayFiltrosAplicados
+    ? 'No se encontraron usuarios con los filtros aplicados.'
+    : 'No hay usuarios registrados.';
 
   function cerrarModal() {
     setModalAbierto(false);
@@ -122,61 +130,59 @@ export function PaginaUsuarios() {
           ) : null
         }
       >
-        <EstadoConsulta
-          loading={consulta.loading}
-          error={consulta.error}
-          data={consulta.data}
-          empty={usuarios.length === 0}
-          emptyDescription="No hay usuarios registrados."
-        >
-          <Space wrap className="mb-4">
-            <Input.Search
-              allowClear
-              className="min-w-64"
-              placeholder="Buscar por nombre, correo, rol o area"
-              value={busqueda}
-              onChange={(event) => setBusqueda(event.target.value)}
-            />
-            <Select<RolUsuario>
-              allowClear
-              className="min-w-40"
-              placeholder="Filtrar rol"
-              value={rolFiltro}
-              options={OPCIONES_FILTRO_ROL_USUARIO}
-              onChange={setRolFiltro}
-            />
-            <Select<number>
-              allowClear
-              className="min-w-44"
-              placeholder="Filtrar area"
-              value={areaFiltro}
-              options={filtrosArea}
-              onChange={setAreaFiltro}
-            />
-            <Select<'activo' | 'inactivo'>
-              allowClear
-              className="min-w-40"
-              placeholder="Filtrar estado"
-              value={activoFiltro}
-              options={OPCIONES_ESTADO_ACTIVO}
-              onChange={setActivoFiltro}
-            />
-            <Button
-              onClick={() => {
-                setBusqueda('');
-                setRolFiltro(undefined);
-                setAreaFiltro(undefined);
-                setActivoFiltro(undefined);
-              }}
-            >
-              Limpiar filtros
-            </Button>
-          </Space>
+        <Space wrap className="mb-4">
+          <Input.Search
+            allowClear
+            className="min-w-64"
+            placeholder="Buscar por nombre, correo, rol o area"
+            value={busqueda}
+            onChange={(event) => setBusqueda(event.target.value)}
+          />
+          <Select<RolUsuario>
+            allowClear
+            className="min-w-40"
+            placeholder="Filtrar rol"
+            value={rolFiltro}
+            options={OPCIONES_FILTRO_ROL_USUARIO}
+            onChange={setRolFiltro}
+          />
+          <Select<number>
+            allowClear
+            className="min-w-44"
+            placeholder="Filtrar area"
+            value={areaFiltro}
+            options={filtrosArea}
+            onChange={setAreaFiltro}
+          />
+          <Select<'activo' | 'inactivo'>
+            allowClear
+            className="min-w-40"
+            placeholder="Filtrar estado"
+            value={activoFiltro}
+            options={OPCIONES_ESTADO_ACTIVO}
+            onChange={setActivoFiltro}
+          />
+          <Button
+            onClick={() => {
+              setBusqueda('');
+              setRolFiltro(undefined);
+              setAreaFiltro(undefined);
+              setActivoFiltro(undefined);
+            }}
+          >
+            Limpiar filtros
+          </Button>
+        </Space>
 
+        {consulta.error ? (
+          <Alert type="error" message={consulta.error} showIcon />
+        ) : (
           <Table<Usuario>
+            loading={consulta.loading}
             pagination={{ pageSize: 8 }}
             rowKey="id"
             dataSource={usuarios}
+            locale={{ emptyText: mensajeSinResultados }}
             columns={[
               { title: 'ID', dataIndex: 'id', sorter: (a, b) => a.id - b.id },
               {
@@ -240,7 +246,7 @@ export function PaginaUsuarios() {
               },
             ]}
           />
-        </EstadoConsulta>
+        )}
       </Card>
 
       <Modal
