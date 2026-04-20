@@ -11,9 +11,7 @@ import { areasService } from '@/servicios/areas/areas.service';
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
 import type { RolUsuario } from '@/tipos/comun';
 import type { Usuario, UsuarioPayload } from '@/tipos/usuarios';
-import {
-  mensajeContiene,
-} from '@/utilidades/crud';
+import { mensajeContiene } from '@/utilidades/crud';
 import { puedeGestionarCatalogos } from '@/utilidades/permisos';
 import {
   construirPayloadUsuario,
@@ -97,6 +95,10 @@ export function PaginaUsuarios() {
           await consulta.refetch();
         },
         onError: async (error, textoError) => {
+          if (mensajeContiene(error, 'rut')) {
+            form.setFields([{ name: 'rut', errors: [textoError] }]);
+          }
+
           if (mensajeContiene(error, 'correo')) {
             form.setFields([{ name: 'email', errors: [textoError] }]);
           }
@@ -134,7 +136,7 @@ export function PaginaUsuarios() {
           <Input.Search
             allowClear
             className="min-w-64"
-            placeholder="Buscar por nombre, correo, rol o area"
+            placeholder="Buscar por nombre, RUT, correo, rol o area"
             value={busqueda}
             onChange={(event) => setBusqueda(event.target.value)}
           />
@@ -201,6 +203,11 @@ export function PaginaUsuarios() {
                 title: 'Correo',
                 dataIndex: 'email',
                 sorter: (a, b) => a.email.localeCompare(b.email),
+              },
+              {
+                title: 'RUT',
+                dataIndex: 'rut',
+                sorter: (a, b) => a.rut.localeCompare(b.rut),
               },
               {
                 title: 'Rol',

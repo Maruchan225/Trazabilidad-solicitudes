@@ -63,6 +63,7 @@ model Usuario {
   id                    Int                  @id @default(autoincrement())
   nombres               String
   apellidos             String
+  rut                   String               @unique
   email                 String               @unique
   contrasena            String
   telefono              String?

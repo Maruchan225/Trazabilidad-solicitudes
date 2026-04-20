@@ -3,6 +3,7 @@ import { compare, hash } from 'bcrypt';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { handlePrismaError } from '../comun/prisma-error.util';
+import { normalizarRut } from '../comun/rut.util';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { FiltroUsuariosDto } from './dto/filtro-usuarios.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
@@ -37,6 +38,7 @@ export class UsuariosService {
       const usuario = await this.prisma.usuario.create({
         data: {
           ...createUsuarioDto,
+          rut: normalizarRut(createUsuarioDto.rut) ?? createUsuarioDto.rut,
           contrasena: contrasenaHasheada,
         },
         include: {
@@ -113,9 +115,21 @@ export class UsuariosService {
       const data = updateUsuarioDto.contrasena
         ? {
             ...updateUsuarioDto,
+            ...(updateUsuarioDto.rut
+              ? {
+                  rut: normalizarRut(updateUsuarioDto.rut) ?? updateUsuarioDto.rut,
+                }
+              : {}),
             contrasena: await this.hashContrasena(updateUsuarioDto.contrasena),
           }
-        : updateUsuarioDto;
+        : {
+            ...updateUsuarioDto,
+            ...(updateUsuarioDto.rut
+              ? {
+                  rut: normalizarRut(updateUsuarioDto.rut) ?? updateUsuarioDto.rut,
+                }
+              : {}),
+          };
 
       const usuario = await this.prisma.usuario.update({
         where: { id },
@@ -183,6 +197,15 @@ export class UsuariosService {
 
   private construirWhere(filtros: FiltroUsuariosDto): Prisma.UsuarioWhereInput {
     const busqueda = filtros.busqueda?.trim();
+    const rutNormalizado = normalizarRut(busqueda);
+    const filtroRut: Prisma.UsuarioWhereInput | undefined = busqueda
+      ? {
+          rut: {
+            contains: rutNormalizado ?? busqueda,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        }
+      : undefined;
     const rolesCoincidentes = ['ENCARGADO', 'REEMPLAZO', 'TRABAJADOR'].filter(
       (rol) => rol.toLowerCase().includes(busqueda?.toLowerCase() ?? ''),
     );
@@ -199,6 +222,7 @@ export class UsuariosService {
               { nombres: { contains: busqueda, mode: 'insensitive' } },
               { apellidos: { contains: busqueda, mode: 'insensitive' } },
               { email: { contains: busqueda, mode: 'insensitive' } },
+              ...(filtroRut ? [filtroRut] : []),
               ...(rolesCoincidentes.length > 0
                 ? [{ rol: { in: rolesCoincidentes as never[] } }]
                 : []),

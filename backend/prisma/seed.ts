@@ -96,6 +96,7 @@ const usuariosBase = [
   {
     nombres: 'Carolina',
     apellidos: 'Munoz',
+    rut: '11111111-1',
     email: 'encargado@demo.cl',
     telefono: '+56911110001',
     rol: RolUsuario.ENCARGADO,
@@ -104,6 +105,7 @@ const usuariosBase = [
   {
     nombres: 'Felipe',
     apellidos: 'Rojas',
+    rut: '11111112-2',
     email: 'reemplazo@demo.cl',
     telefono: '+56911110002',
     rol: RolUsuario.REEMPLAZO,
@@ -112,6 +114,7 @@ const usuariosBase = [
   {
     nombres: 'Daniela',
     apellidos: 'Perez',
+    rut: '11111113-3',
     email: 'trabajador.partes@demo.cl',
     telefono: '+56911110003',
     rol: RolUsuario.TRABAJADOR,
@@ -120,6 +123,7 @@ const usuariosBase = [
   {
     nombres: 'Marcelo',
     apellidos: 'Vega',
+    rut: '11111114-4',
     email: 'trabajador.atencion@demo.cl',
     telefono: '+56911110004',
     rol: RolUsuario.TRABAJADOR,
@@ -128,6 +132,7 @@ const usuariosBase = [
   {
     nombres: 'Paula',
     apellidos: 'Soto',
+    rut: '11111115-5',
     email: 'trabajador.obras@demo.cl',
     telefono: '+56911110005',
     rol: RolUsuario.TRABAJADOR,
@@ -136,6 +141,7 @@ const usuariosBase = [
   {
     nombres: 'Javier',
     apellidos: 'Araya',
+    rut: '11111116-6',
     email: 'trabajador.transito@demo.cl',
     telefono: '+56911110006',
     rol: RolUsuario.TRABAJADOR,
@@ -144,6 +150,7 @@ const usuariosBase = [
   {
     nombres: 'Camila',
     apellidos: 'Torres',
+    rut: '11111117-7',
     email: 'trabajador.juridico@demo.cl',
     telefono: '+56911110007',
     rol: RolUsuario.TRABAJADOR,
@@ -152,6 +159,7 @@ const usuariosBase = [
   {
     nombres: 'Ignacio',
     apellidos: 'Leiva',
+    rut: '11111118-8',
     email: 'trabajador.finanzas@demo.cl',
     telefono: '+56911110008',
     rol: RolUsuario.TRABAJADOR,
@@ -160,6 +168,7 @@ const usuariosBase = [
   {
     nombres: 'Francisca',
     apellidos: 'Gutierrez',
+    rut: '11111119-9',
     email: 'trabajador.dideco@demo.cl',
     telefono: '+56911110009',
     rol: RolUsuario.TRABAJADOR,
@@ -168,6 +177,7 @@ const usuariosBase = [
   {
     nombres: 'Luis',
     apellidos: 'Contreras',
+    rut: '11111120-K',
     email: 'trabajador.aseo@demo.cl',
     telefono: '+56911110010',
     rol: RolUsuario.TRABAJADOR,
@@ -240,6 +250,7 @@ async function main() {
       return {
         nombres: usuario.nombres,
         apellidos: usuario.apellidos,
+        rut: usuario.rut,
         email: usuario.email,
         contrasena: contrasenaHasheada,
         telefono: usuario.telefono,

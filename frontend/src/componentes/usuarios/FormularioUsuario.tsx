@@ -4,6 +4,7 @@ import type { RolUsuario } from '@/tipos/comun';
 import type { Area } from '@/tipos/areas';
 import type { UsuarioPayload } from '@/tipos/usuarios';
 import { OPCIONES_ROL_USUARIO, mapearOpcionesAreas } from '@/utilidades/opciones';
+import { normalizarRut } from '@/utilidades/rut';
 
 type FormularioUsuarioProps = {
   form: FormInstance<UsuarioPayload>;
@@ -45,6 +46,27 @@ export function FormularioUsuario({
         ]}
       >
         <Input maxLength={120} showCount />
+      </Form.Item>
+      <Form.Item
+        label="RUT"
+        name="rut"
+        normalize={(value: string) => value?.toUpperCase()}
+        rules={[
+          { required: true, message: 'Ingrese el RUT' },
+          {
+            validator: async (_, value?: string) => {
+              if (!value?.trim()) {
+                return Promise.resolve();
+              }
+
+              return normalizarRut(value)
+                ? Promise.resolve()
+                : Promise.reject(new Error('Ingrese un RUT valido'));
+            },
+          },
+        ]}
+      >
+        <Input maxLength={12} placeholder="12345678-9" />
       </Form.Item>
       <Form.Item
         label="Correo"

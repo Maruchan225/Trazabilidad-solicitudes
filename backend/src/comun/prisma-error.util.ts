@@ -12,6 +12,10 @@ export function handlePrismaError(error: unknown, entityName: string): never {
       throw new ConflictException('El correo ingresado ya esta registrado');
     }
 
+    if (entityName === 'usuario' && campos.includes('rut')) {
+      throw new ConflictException('El rut ingresado ya esta registrado');
+    }
+
     throw new ConflictException(
       `Se produjo un conflicto de unicidad al guardar ${entityName}`,
     );

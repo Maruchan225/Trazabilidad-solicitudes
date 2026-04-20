@@ -5,6 +5,7 @@ export type Usuario = {
   id: number;
   nombres: string;
   apellidos: string;
+  rut: string;
   email: string;
   telefono?: string | null;
   rol: RolUsuario;
@@ -18,6 +19,7 @@ export type Usuario = {
 export type UsuarioPayload = {
   nombres: string;
   apellidos: string;
+  rut: string;
   email: string;
   contrasena?: string;
   telefono?: string;

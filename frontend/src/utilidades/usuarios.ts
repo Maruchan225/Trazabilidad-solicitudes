@@ -3,6 +3,7 @@ import {
   normalizarTextoOpcional,
   normalizarTextoRequerido,
 } from '@/utilidades/crud';
+import { normalizarRut } from '@/utilidades/rut';
 
 export function obtenerValoresFormularioUsuario(
   usuario?: Usuario | null,
@@ -18,6 +19,7 @@ export function obtenerValoresFormularioUsuario(
   return {
     nombres: usuario.nombres,
     apellidos: usuario.apellidos,
+    rut: usuario.rut,
     email: usuario.email,
     telefono: usuario.telefono ?? undefined,
     rol: usuario.rol,
@@ -33,6 +35,7 @@ export function construirPayloadUsuario(values: UsuarioPayload): UsuarioPayload 
   return {
     nombres: normalizarTextoRequerido(values.nombres),
     apellidos: normalizarTextoRequerido(values.apellidos),
+    rut: normalizarRut(values.rut) ?? normalizarTextoRequerido(values.rut),
     email: normalizarTextoRequerido(values.email).toLowerCase(),
     telefono: normalizarTextoOpcional(values.telefono),
     rol: values.rol,

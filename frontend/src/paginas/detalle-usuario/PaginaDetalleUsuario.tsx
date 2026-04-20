@@ -7,7 +7,6 @@ import {
   Modal,
   Row,
   Table,
-  Tag,
   message,
 } from 'antd';
 import { useState } from 'react';
@@ -26,9 +25,7 @@ import { solicitudesService } from '@/servicios/solicitudes/solicitudes.service'
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
 import type { Solicitud } from '@/tipos/solicitudes';
 import type { UsuarioPayload } from '@/tipos/usuarios';
-import {
-  mensajeContiene,
-} from '@/utilidades/crud';
+import { mensajeContiene } from '@/utilidades/crud';
 import { puedeGestionarCatalogos } from '@/utilidades/permisos';
 import {
   construirPayloadUsuario,
@@ -80,6 +77,10 @@ export function PaginaDetalleUsuario() {
         await Promise.all([usuario.refetch(), solicitudes.refetch()]);
       },
       onError: async (error, textoError) => {
+        if (mensajeContiene(error, 'rut')) {
+          form.setFields([{ name: 'rut', errors: [textoError] }]);
+        }
+
         if (mensajeContiene(error, 'correo')) {
           form.setFields([{ name: 'email', errors: [textoError] }]);
         }
@@ -124,6 +125,9 @@ export function PaginaDetalleUsuario() {
                 </Descriptions.Item>
                 <Descriptions.Item label="Correo">
                   {usuario.data?.email}
+                </Descriptions.Item>
+                <Descriptions.Item label="RUT">
+                  {usuario.data?.rut}
                 </Descriptions.Item>
                 <Descriptions.Item label="Telefono">
                   {usuario.data?.telefono || 'Sin telefono'}

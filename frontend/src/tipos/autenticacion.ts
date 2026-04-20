@@ -3,6 +3,7 @@ import type { RolUsuario } from '@/tipos/comun';
 export type UsuarioSesion = {
   id: number;
   correo: string;
+  rut: string;
   rol: RolUsuario;
   areaId: number;
   nombres: string;
