@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AccionHistorialSolicitud, Prisma, RolUsuario } from '@prisma/client';
-import { unlink } from 'fs/promises';
+import { createReadStream } from 'fs';
+import { access, unlink } from 'fs/promises';
 import type { Express } from 'express';
 import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { handlePrismaError } from '../comun/prisma-error.util';
@@ -80,6 +81,29 @@ export class AdjuntosService {
   async obtenerInformacion(id: number, usuario: UsuarioToken) {
     const adjunto = await this.ensureAdjuntoVisible(id, usuario);
     return adjunto;
+  }
+
+  async obtenerArchivoAdjunto(id: number, usuario: UsuarioToken) {
+    const adjunto = await this.ensureAdjuntoVisible(id, usuario);
+
+    try {
+      await access(adjunto.ruta);
+    } catch (error) {
+      const codigo = (error as NodeJS.ErrnoException).code;
+
+      if (codigo === 'ENOENT') {
+        throw new NotFoundException(
+          `El archivo del adjunto ${id} no se encuentra disponible`,
+        );
+      }
+
+      throw error;
+    }
+
+    return {
+      adjunto,
+      stream: createReadStream(adjunto.ruta),
+    };
   }
 
   async eliminarAdjunto(id: number, usuario: UsuarioToken) {

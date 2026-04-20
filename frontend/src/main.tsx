@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ConfigProvider, theme } from 'antd';
+import { App, ConfigProvider, theme } from 'antd';
 import esES from 'antd/locale/es_ES';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './aplicacion/router';
@@ -31,9 +31,11 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
         },
       }}
     >
-      <AutenticacionProvider>
-        <RouterProvider router={router} />
-      </AutenticacionProvider>
+      <App>
+        <AutenticacionProvider>
+          <RouterProvider router={router} />
+        </AutenticacionProvider>
+      </App>
     </ConfigProvider>
   </React.StrictMode>,
 );

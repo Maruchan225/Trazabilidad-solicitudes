@@ -50,8 +50,8 @@ export function PaginaTiposSolicitud() {
           : tiposSolicitudService.crear(values),
       {
         mensajeExito: tipoEditando
-          ? 'Tipo de solicitud actualizado'
-          : 'Tipo de solicitud creado',
+          ? 'Tipo de solicitud actualizado con exito'
+          : 'Tipo de solicitud creado con exito',
         mensajeError: 'No fue posible guardar',
         onSuccess: async () => {
           cerrarModal();

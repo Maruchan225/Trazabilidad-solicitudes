@@ -5,6 +5,8 @@ type NombreIcono =
   | 'mas'
   | 'usuario'
   | 'candado'
+  | 'ver'
+  | 'descargar'
   | 'salir'
   | 'dashboard'
   | 'solicitudes'
@@ -60,6 +62,19 @@ export function Icono({ nombre, className, style }: IconoProps) {
       <>
         <rect x="5" y="11" width="14" height="10" rx="2" />
         <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+      </>,
+    ),
+    ver: trazo(
+      <>
+        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+        <circle cx="12" cy="12" r="3" />
+      </>,
+    ),
+    descargar: trazo(
+      <>
+        <path d="M12 4v11" />
+        <path d="m7 11 5 5 5-5" />
+        <path d="M5 20h14" />
       </>,
     ),
     salir: trazo(

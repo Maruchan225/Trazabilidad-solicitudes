@@ -1,4 +1,4 @@
-import { Button, Card, Form, Input, Modal, Popconfirm, Space, Switch, Table, Tag, message } from 'antd';
+import { App, Button, Card, Form, Input, Modal, Popconfirm, Space, Switch, Table, Tag } from 'antd';
 import { useState } from 'react';
 import { EstadoConsulta } from '@/componentes/ui/EstadoConsulta';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
@@ -41,6 +41,7 @@ function noSePuedeEliminarPorUsuariosAsignados(error: unknown) {
 }
 
 export function PaginaAreas() {
+  const { message } = App.useApp();
   const { sesion } = useAutenticacion();
   const [modal, contextHolder] = Modal.useModal();
   const consulta = useConsulta(() => areasService.listar(), []);
@@ -75,7 +76,9 @@ export function PaginaAreas() {
           ? areasService.actualizar(areaEditando.id, values)
           : areasService.crear(values),
       {
-        mensajeExito: areaEditando ? 'Area actualizada' : 'Area creada',
+        mensajeExito: areaEditando
+          ? 'Area actualizada con exito'
+          : 'Area creada con exito',
         mensajeError: MENSAJE_ERROR_GUARDAR,
         onSuccess: async () => {
           cerrarModal();

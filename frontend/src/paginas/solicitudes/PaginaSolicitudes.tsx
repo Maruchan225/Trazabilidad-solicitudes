@@ -88,7 +88,7 @@ export function PaginaSolicitudes() {
     };
 
     await ejecutar(() => solicitudesService.crear(payload), {
-      mensajeExito: 'Solicitud creada',
+      mensajeExito: 'Solicitud creada con exito',
       mensajeError: 'No fue posible crear',
       onSuccess: async (solicitud) => {
         cerrarModal();

@@ -1,4 +1,5 @@
 import {
+  App,
   Button,
   Card,
   Col,
@@ -7,7 +8,6 @@ import {
   Modal,
   Row,
   Table,
-  message,
 } from 'antd';
 import { useState } from 'react';
 import { FormularioUsuario } from '@/componentes/usuarios/FormularioUsuario';
@@ -33,6 +33,7 @@ import {
 } from '@/utilidades/usuarios';
 
 export function PaginaDetalleUsuario() {
+  const { message } = App.useApp();
   const { sesion } = useAutenticacion();
   const { id } = useParams();
   const usuarioId = Number(id);
@@ -70,7 +71,7 @@ export function PaginaDetalleUsuario() {
     const payload = construirPayloadUsuario(values);
 
     await ejecutar(() => usuariosService.actualizar(usuarioId, payload), {
-      mensajeExito: 'Usuario actualizado',
+      mensajeExito: 'Usuario actualizado con exito',
       mensajeError: 'No fue posible guardar',
       onSuccess: async () => {
         cerrarModal();

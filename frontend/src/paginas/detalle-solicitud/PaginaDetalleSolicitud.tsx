@@ -1,4 +1,5 @@
 import {
+  App,
   Button,
   Card,
   Col,
@@ -6,6 +7,7 @@ import {
   Form,
   List,
   Modal,
+  Popconfirm,
   Row,
   Space,
   Tag,
@@ -20,6 +22,7 @@ import {
   FormularioAccionSolicitudValores,
   TITULOS_ACCION_SOLICITUD,
 } from '@/componentes/solicitudes/FormularioAccionSolicitud';
+import { Icono } from '@/componentes/ui/Icono';
 import { EstadoConsulta } from '@/componentes/ui/EstadoConsulta';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
 import { TagEstadoSolicitud } from '@/componentes/ui/tags/TagEstadoSolicitud';
@@ -30,7 +33,18 @@ import { areasService } from '@/servicios/areas/areas.service';
 import { solicitudesService } from '@/servicios/solicitudes/solicitudes.service';
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
 import type { HistorialSolicitud } from '@/tipos/solicitudes';
+import { obtenerMensajeError } from '@/utilidades/crud';
 import { esRolTrabajador, puedeGestionarSolicitudes } from '@/utilidades/permisos';
+
+const EXTENSIONES_ADJUNTOS_PERMITIDAS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.jpg',
+  '.jpeg',
+  '.png',
+];
+const TAMANO_MAXIMO_ADJUNTO_BYTES = 10 * 1024 * 1024;
 
 function obtenerNombreCompleto(
   usuario?: { nombres: string; apellidos: string } | null,
@@ -104,6 +118,7 @@ function describirEntradaHistorial(item: HistorialSolicitud) {
 }
 
 export function PaginaDetalleSolicitud() {
+  const { message } = App.useApp();
   const { id } = useParams();
   const solicitudId = Number(id);
   const { sesion } = useAutenticacion();
@@ -195,7 +210,7 @@ export function PaginaDetalleSolicitud() {
 
       throw new Error('No fue posible actualizar');
     }, {
-      mensajeExito: 'Solicitud actualizada',
+      mensajeExito: 'Solicitud actualizada con exito',
       mensajeError: 'No fue posible actualizar',
       onSuccess: async () => {
         setAccionActiva(null);
@@ -207,7 +222,7 @@ export function PaginaDetalleSolicitud() {
 
   async function subirAdjunto(archivo: File) {
     await ejecutarAdjunto(() => solicitudesService.subirAdjunto(solicitudId, archivo), {
-      mensajeExito: 'Adjunto subido',
+      mensajeExito: 'Adjunto subido con exito',
       mensajeError: 'No fue posible subir el adjunto',
       onSuccess: async () => {
         await adjuntos.refetch();
@@ -225,6 +240,73 @@ export function PaginaDetalleSolicitud() {
         await consulta.refetch();
       },
     });
+  }
+
+  function liberarUrlTemporal(url: string) {
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 60_000);
+  }
+
+  async function verAdjunto(adjuntoId: number) {
+    try {
+      const archivo = await solicitudesService.obtenerAdjuntoArchivo(adjuntoId);
+      const url = URL.createObjectURL(archivo.blob);
+      const ventana = window.open(url, '_blank', 'noopener,noreferrer');
+
+      if (!ventana) {
+        const enlace = document.createElement('a');
+        enlace.href = url;
+        enlace.target = '_blank';
+        enlace.rel = 'noopener noreferrer';
+        enlace.click();
+      }
+
+      liberarUrlTemporal(url);
+    } catch (error) {
+      void message.error(
+        obtenerMensajeError(error, 'No fue posible abrir el adjunto'),
+      );
+    }
+  }
+
+  async function descargarAdjunto(adjuntoId: number) {
+    try {
+      const archivo = await solicitudesService.descargarAdjuntoArchivo(adjuntoId);
+      const url = URL.createObjectURL(archivo.blob);
+      const enlace = document.createElement('a');
+
+      enlace.href = url;
+      enlace.download = archivo.nombreArchivo;
+      enlace.click();
+      liberarUrlTemporal(url);
+    } catch (error) {
+      void message.error(
+        obtenerMensajeError(error, 'No fue posible descargar el adjunto'),
+      );
+    }
+  }
+
+  function validarAdjuntoAntesDeSubir(archivo: File) {
+    const nombreArchivo = archivo.name.toLowerCase();
+    const extensionValida = EXTENSIONES_ADJUNTOS_PERMITIDAS.some((extension) =>
+      nombreArchivo.endsWith(extension),
+    );
+
+    if (!extensionValida) {
+      void message.error(
+        'Formato no permitido. Use PDF, DOC, DOCX, JPG, JPEG o PNG.',
+      );
+      return Upload.LIST_IGNORE;
+    }
+
+    if (archivo.size > TAMANO_MAXIMO_ADJUNTO_BYTES) {
+      void message.error('El archivo supera el limite de 10 MB.');
+      return Upload.LIST_IGNORE;
+    }
+
+    void subirAdjunto(archivo);
+    return Upload.LIST_IGNORE;
   }
 
   return (
@@ -311,16 +393,18 @@ export function PaginaDetalleSolicitud() {
                 title="Adjuntos"
                 extra={
                   <Upload
+                    accept={EXTENSIONES_ADJUNTOS_PERMITIDAS.join(',')}
                     showUploadList={false}
-                    beforeUpload={(archivo) => {
-                      void subirAdjunto(archivo);
-                      return false;
-                    }}
+                    beforeUpload={validarAdjuntoAntesDeSubir}
                   >
                     <Button loading={subiendo}>Subir adjunto</Button>
                   </Upload>
                 }
               >
+                <Typography.Paragraph className="!mb-4 !text-sm !text-black/65">
+                  Formatos permitidos: PDF, DOC, DOCX, JPG y PNG. Tamano maximo:
+                  10 MB.
+                </Typography.Paragraph>
                 <EstadoConsulta
                   loading={adjuntos.loading}
                   error={adjuntos.error}
@@ -331,21 +415,60 @@ export function PaginaDetalleSolicitud() {
                   <List
                     dataSource={adjuntos.data ?? []}
                     renderItem={(adjunto) => (
-                      <List.Item
-                        actions={[
-                          <Button
-                            key="eliminar"
-                            danger
-                            onClick={() => void eliminarAdjunto(adjunto.id)}
+                      <List.Item className="!items-start">
+                        <div className="flex w-full flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <List.Item.Meta
+                            className="!m-0 min-w-0 flex-1"
+                            title={
+                              <Typography.Text className="!block !whitespace-normal !break-words !text-black">
+                                {adjunto.nombreOriginal}
+                              </Typography.Text>
+                            }
+                            description={
+                              <Typography.Text className="!text-black/60">
+                                {Math.round(adjunto.tamano / 1024)} KB
+                              </Typography.Text>
+                            }
+                          />
+                          <Space
+                            size={8}
+                            wrap
+                            className="w-full md:w-auto md:justify-end"
                           >
-                            Eliminar
-                          </Button>,
-                        ]}
-                      >
-                        <List.Item.Meta
-                          title={adjunto.nombreOriginal}
-                          description={`${Math.round(adjunto.tamano / 1024)} KB`}
-                        />
+                            <Button
+                              size="small"
+                              icon={<Icono nombre="ver" />}
+                              className="!rounded-full !border-municipal-200 !bg-municipal-50 !px-3 !text-municipal-800 hover:!border-municipal-300 hover:!bg-white hover:!text-municipal-900"
+                              onClick={() => void verAdjunto(adjunto.id)}
+                            >
+                              Ver
+                            </Button>
+                            <Button
+                              size="small"
+                              icon={<Icono nombre="descargar" />}
+                              className="!rounded-full !border-municipal-200 !bg-white !px-3 !text-municipal-700 hover:!border-municipal-300 hover:!bg-municipal-50 hover:!text-municipal-900"
+                              onClick={() => void descargarAdjunto(adjunto.id)}
+                            >
+                              Descargar
+                            </Button>
+                            <Popconfirm
+                              title="Eliminar adjunto"
+                              description="Esta accion no se puede deshacer."
+                              okText="Eliminar"
+                              cancelText="Cancelar"
+                              onConfirm={() => void eliminarAdjunto(adjunto.id)}
+                            >
+                              <Button
+                                key="eliminar"
+                                size="small"
+                                danger
+                                className="!rounded-full !px-3"
+                              >
+                                Eliminar
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        </div>
                       </List.Item>
                     )}
                   />

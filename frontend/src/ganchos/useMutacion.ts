@@ -1,4 +1,4 @@
-import { message } from 'antd';
+import { App } from 'antd';
 import { useState } from 'react';
 import { obtenerMensajeError } from '@/utilidades/crud';
 
@@ -10,6 +10,7 @@ type OpcionesMutacion<TResult> = {
 };
 
 export function useMutacion() {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
 
   async function ejecutar<TResult>(

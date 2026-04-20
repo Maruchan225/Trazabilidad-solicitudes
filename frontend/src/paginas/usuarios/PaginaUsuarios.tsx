@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, message } from 'antd';
+import { Alert, App, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table } from 'antd';
 import { Link } from 'react-router-dom';
 import { useDeferredValue, useState } from 'react';
 import { FormularioUsuario } from '@/componentes/usuarios/FormularioUsuario';
@@ -24,6 +24,7 @@ import {
 } from '@/utilidades/opciones';
 
 export function PaginaUsuarios() {
+  const { message } = App.useApp();
   const { sesion } = useAutenticacion();
   const [rolFiltro, setRolFiltro] = useState<RolUsuario>();
   const [areaFiltro, setAreaFiltro] = useState<number>();
@@ -88,7 +89,9 @@ export function PaginaUsuarios() {
               contrasena: values.contrasena?.trim() ?? '',
             }),
       {
-        mensajeExito: usuarioEditando ? 'Usuario actualizado' : 'Usuario creado',
+        mensajeExito: usuarioEditando
+          ? 'Usuario actualizado con exito'
+          : 'Usuario creado con exito',
         mensajeError: 'No fue posible guardar',
         onSuccess: async () => {
           cerrarModal();
