@@ -1,15 +1,3 @@
-# Backend De Trazabilidad Municipal
-
-Base backend para un sistema interno municipal de trazabilidad de solicitudes con NestJS, TypeScript, PostgreSQL y Prisma.
-
-## Stack
-
-- Node.js
-- TypeScript
-- NestJS
-- Express
-- PostgreSQL
-- Prisma
 
 ## Modulos
 
@@ -92,44 +80,6 @@ PORT=3000
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/trazabilidad_municipal?schema=public"
 ```
 
-## Instalacion
-
-```bash
-npm install
-cp .env.example .env
-```
-
-En PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-## Prisma
-
-Generar cliente:
-
-```bash
-npm run prisma:generate
-```
-
-Crear y aplicar migraciones en desarrollo:
-
-```bash
-npm run prisma:migrate -- --name base_trazabilidad_municipal
-```
-
-Aplicar migraciones existentes:
-
-```bash
-npm run prisma:deploy
-```
-
-## Ejecutar
-
-```bash
-npm run start:dev
-```
 
 Base URL:
 
@@ -161,59 +111,6 @@ http://localhost:3000/api
 - `GET /api/historial-solicitudes`
 - `GET /api/historial-solicitudes/solicitud/:solicitudId`
 
-## Ejemplos De Solicitudes
 
-Crear area:
-
-```bash
-curl -X POST http://localhost:3000/api/areas -H "Content-Type: application/json" -d "{\"nombre\":\"Obras Municipales\",\"descripcion\":\"Gestion de obras y mantenciones\"}"
-```
-
-Crear usuario:
-
-```bash
-curl -X POST http://localhost:3000/api/usuarios -H "Content-Type: application/json" -d "{\"nombres\":\"Ana\",\"apellidos\":\"Perez\",\"email\":\"ana.perez@municipio.local\",\"rol\":\"TRABAJADOR\",\"areaId\":1}"
-```
-
-Crear tipo de solicitud:
-
-```bash
-curl -X POST http://localhost:3000/api/tipos-solicitud -H "Content-Type: application/json" -d "{\"nombre\":\"Bacheo\",\"descripcion\":\"Reparacion de pavimento\",\"diasSla\":10}"
-```
-
-Crear solicitud:
-
-```bash
-curl -X POST http://localhost:3000/api/solicitudes -H "Content-Type: application/json" -d "{\"titulo\":\"Reparacion de vereda\",\"descripcion\":\"Se solicita reparacion de vereda en calle principal\",\"prioridad\":\"ALTA\",\"fechaVencimiento\":\"2026-04-20T18:00:00.000Z\",\"creadoPorId\":1,\"areaActualId\":1,\"tipoSolicitudId\":1}"
-```
-
-Asignar solicitud:
-
-```bash
-curl -X PATCH http://localhost:3000/api/solicitudes/1/asignar -H "Content-Type: application/json" -d "{\"asignadoAId\":1,\"actorUsuarioId\":1,\"comentario\":\"Asignada para revision tecnica\"}"
-```
-
-Derivar solicitud:
-
-```bash
-curl -X PATCH http://localhost:3000/api/solicitudes/1/derivar -H "Content-Type: application/json" -d "{\"areaDestinoId\":2,\"actorUsuarioId\":1,\"comentario\":\"Se deriva a transito por competencia\"}"
-```
-
-Cambiar estado:
-
-```bash
-curl -X PATCH http://localhost:3000/api/solicitudes/1/estado -H "Content-Type: application/json" -d "{\"estado\":\"EN_PROCESO\",\"actorUsuarioId\":1,\"comentario\":\"Trabajo iniciado\"}"
-```
-
-Cerrar solicitud:
-
-```bash
-curl -X PATCH http://localhost:3000/api/solicitudes/1/cerrar -H "Content-Type: application/json" -d "{\"actorUsuarioId\":1,\"comentario\":\"Solicitud completada y cerrada\"}"
-```
-
-## Decisiones Tomadas
-
-- La base de datos usa nombres en espanol para enums, tablas y columnas.
-- Los modulos principales tambien quedaron nombrados en espanol para mantener consistencia de dominio.
 - `HistorialSolicitud` registra automaticamente eventos de creacion, asignacion, desasignacion, derivacion, cambio de estado y cierre.
 - La logica de solicitudes usa transacciones Prisma para mantener consistencia entre la solicitud y su historial.
