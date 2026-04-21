@@ -21,5 +21,32 @@ export function handlePrismaError(error: unknown, entityName: string): never {
     );
   }
 
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2003'
+  ) {
+    if (entityName === 'usuario') {
+      throw new ConflictException(
+        'No se puede eliminar el usuario porque tiene registros asociados',
+      );
+    }
+
+    if (entityName === 'area') {
+      throw new ConflictException(
+        'No se puede eliminar el area porque tiene registros asociados',
+      );
+    }
+
+    if (entityName === 'tipo de solicitud') {
+      throw new ConflictException(
+        'No se puede eliminar el tipo de solicitud porque tiene solicitudes asociadas',
+      );
+    }
+
+    throw new ConflictException(
+      `No se puede eliminar ${entityName} porque tiene registros asociados`,
+    );
+  }
+
   throw error;
 }

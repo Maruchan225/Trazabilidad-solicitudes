@@ -1,5 +1,5 @@
 import { Breadcrumb, Button, Layout, Menu, Space, Typography } from 'antd';
-import { useEffect, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Icono } from '@/componentes/ui/Icono';
 import { TagRol } from '@/componentes/ui/tags/TagRol';
@@ -69,12 +69,6 @@ export function LayoutPrincipal() {
   const itemsMenuVisibles = itemsMenu.filter(
     (item) => !item.roles || item.roles.includes(sesion?.usuario.rol ?? 'TRABAJADOR'),
   );
-
-  useEffect(() => {
-    if (sesion?.usuario.rol === 'TRABAJADOR' && location.pathname === '/dashboard') {
-      navigate('/solicitudes', { replace: true });
-    }
-  }, [location.pathname, navigate, sesion?.usuario.rol]);
 
   const selectedKey = itemsMenuVisibles.find((item) =>
     location.pathname.startsWith(item.key),

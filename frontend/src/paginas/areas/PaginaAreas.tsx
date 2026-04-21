@@ -19,6 +19,8 @@ const MENSAJE_ERROR_GUARDAR = 'No fue posible guardar';
 const MENSAJE_ERROR_ELIMINAR = 'No fue posible eliminar';
 const MENSAJE_AREA_CON_USUARIOS =
   'No se puede eliminar el area ya que tiene usuarios asignados a ella.';
+const MENSAJE_AREA_CON_REGISTROS =
+  'No se puede eliminar el area porque tiene registros asociados.';
 
 function obtenerPayloadInicial(area?: Area | null): Partial<AreaPayload> {
   if (!area) {
@@ -33,10 +35,6 @@ function obtenerPayloadInicial(area?: Area | null): Partial<AreaPayload> {
 }
 
 function noSePuedeEliminarPorUsuariosAsignados(error: unknown) {
-  if (esErrorApiConEstado(error, 409)) {
-    return true;
-  }
-
   return mensajeContiene(error, 'tiene usuarios asignados');
 }
 
@@ -100,6 +98,17 @@ export function PaginaAreas() {
           modal.warning({
             title: 'No se puede eliminar el area',
             content: MENSAJE_AREA_CON_USUARIOS,
+          });
+          return;
+        }
+
+        if (
+          esErrorApiConEstado(error, 409) ||
+          mensajeContiene(error, 'registros asociados')
+        ) {
+          modal.warning({
+            title: 'No se puede eliminar el area',
+            content: MENSAJE_AREA_CON_REGISTROS,
           });
           return;
         }

@@ -4,11 +4,10 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Icono } from '@/componentes/ui/Icono';
 import { useAutenticacion } from '@/ganchos/useAutenticacion';
 import type { CredencialesLogin } from '@/tipos/autenticacion';
-import type { RolUsuario } from '@/tipos/comun';
-
-function obtenerRutaInicial(rol?: RolUsuario) {
-  return rol === 'TRABAJADOR' ? '/solicitudes' : '/dashboard';
-}
+import {
+  obtenerRutaInicialPorRol,
+  obtenerRutaSeguraPorRol,
+} from '@/utilidades/permisos';
 
 export function PaginaLogin() {
   const navigate = useNavigate();
@@ -19,10 +18,10 @@ export function PaginaLogin() {
 
   const rutaSolicitada = (location.state as { from?: { pathname?: string } } | null)
     ?.from?.pathname;
-  const redirectTo =
-    sesion?.usuario.rol === 'TRABAJADOR' && rutaSolicitada === '/dashboard'
-      ? '/solicitudes'
-      : rutaSolicitada ?? obtenerRutaInicial(sesion?.usuario.rol);
+  const redirectTo = obtenerRutaSeguraPorRol(
+    rutaSolicitada,
+    sesion?.usuario.rol,
+  );
 
   if (autenticado) {
     return <Navigate to={redirectTo} replace />;
@@ -34,7 +33,9 @@ export function PaginaLogin() {
 
     try {
       const nuevaSesion = await iniciarSesion(values);
-      navigate(obtenerRutaInicial(nuevaSesion.usuario.rol), { replace: true });
+      navigate(obtenerRutaInicialPorRol(nuevaSesion.usuario.rol), {
+        replace: true,
+      });
     } catch (error) {
       setError(
         error instanceof Error ? error.message : 'No fue posible iniciar sesion',

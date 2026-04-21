@@ -68,8 +68,12 @@ export class AreasService {
       );
     }
 
-    return this.prisma.area.delete({
-      where: { id },
-    });
+    try {
+      return await this.prisma.area.delete({
+        where: { id },
+      });
+    } catch (error) {
+      handlePrismaError(error, 'area');
+    }
   }
 }

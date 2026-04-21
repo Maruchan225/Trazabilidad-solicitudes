@@ -11,7 +11,7 @@ import { areasService } from '@/servicios/areas/areas.service';
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
 import type { RolUsuario } from '@/tipos/comun';
 import type { Usuario, UsuarioPayload } from '@/tipos/usuarios';
-import { mensajeContiene } from '@/utilidades/crud';
+import { esErrorApiConEstado, mensajeContiene, obtenerMensajeError } from '@/utilidades/crud';
 import { puedeGestionarCatalogos } from '@/utilidades/permisos';
 import {
   construirPayloadUsuario,
@@ -118,6 +118,19 @@ export function PaginaUsuarios() {
       mensajeError: 'No fue posible eliminar',
       onSuccess: async () => {
         await consulta.refetch();
+      },
+      onError: async (error) => {
+        if (
+          esErrorApiConEstado(error, 409) ||
+          mensajeContiene(error, 'registros asociados')
+        ) {
+          message.error(
+            'No se puede eliminar el usuario porque tiene registros asociados.',
+          );
+          return;
+        }
+
+        message.error(obtenerMensajeError(error, 'No fue posible eliminar'));
       },
     });
   }

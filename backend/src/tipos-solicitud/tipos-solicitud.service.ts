@@ -56,9 +56,13 @@ export class TiposSolicitudService {
   async eliminar(id: number) {
     await this.obtenerPorId(id);
 
-    return this.prisma.tipoSolicitud.delete({
-      where: { id },
-    });
+    try {
+      return await this.prisma.tipoSolicitud.delete({
+        where: { id },
+      });
+    } catch (error) {
+      handlePrismaError(error, 'tipo de solicitud');
+    }
   }
 
   async asegurarExistencia(id: number) {

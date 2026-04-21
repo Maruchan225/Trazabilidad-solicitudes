@@ -156,9 +156,13 @@ export class UsuariosService {
   async eliminar(id: number) {
     await this.obtenerPorId(id);
 
-    return this.prisma.usuario.delete({
-      where: { id },
-    });
+    try {
+      return await this.prisma.usuario.delete({
+        where: { id },
+      });
+    } catch (error) {
+      handlePrismaError(error, 'usuario');
+    }
   }
 
   async asegurarExistencia(id: number) {

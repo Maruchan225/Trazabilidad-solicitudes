@@ -1,4 +1,4 @@
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag, message } from 'antd';
+import { App, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag } from 'antd';
 import { useState } from 'react';
 import { EstadoConsulta } from '@/componentes/ui/EstadoConsulta';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
@@ -8,9 +8,11 @@ import { useConsulta } from '@/ganchos/useConsulta';
 import { useMutacion } from '@/ganchos/useMutacion';
 import { tiposSolicitudService } from '@/servicios/tipos-solicitud/tiposSolicitud.service';
 import type { TipoSolicitud, TipoSolicitudPayload } from '@/tipos/tiposSolicitud';
+import { esErrorApiConEstado, mensajeContiene, obtenerMensajeError } from '@/utilidades/crud';
 import { puedeGestionarCatalogos } from '@/utilidades/permisos';
 
 export function PaginaTiposSolicitud() {
+  const { message } = App.useApp();
   const { sesion } = useAutenticacion();
   const consulta = useConsulta(() => tiposSolicitudService.listar(), []);
   const [form] = Form.useForm<TipoSolicitudPayload>();
@@ -67,6 +69,19 @@ export function PaginaTiposSolicitud() {
       mensajeError: 'No fue posible eliminar',
       onSuccess: async () => {
         await consulta.refetch();
+      },
+      onError: async (error) => {
+        if (
+          esErrorApiConEstado(error, 409) ||
+          mensajeContiene(error, 'solicitudes asociadas')
+        ) {
+          message.error(
+            'No se puede eliminar porque este tipo de solicitud ya tiene solicitudes asociadas.',
+          );
+          return;
+        }
+
+        message.error(obtenerMensajeError(error, 'No fue posible eliminar'));
       },
     });
   }

@@ -124,12 +124,14 @@ export class SolicitudesService {
   async listar(usuario: UsuarioToken, filtros: FiltroSolicitudesDto) {
     await this.asegurarUsuarioActivoExiste(usuario.id);
 
+    const where = this.combinarFiltrosSolicitud(
+      ACTIVE_REQUEST_WHERE,
+      this.construirFiltroVisibilidad(usuario),
+      this.construirFiltroConsulta(filtros),
+    );
+
     const solicitudes = await this.prisma.solicitud.findMany({
-      where: {
-        ...ACTIVE_REQUEST_WHERE,
-        ...this.construirFiltroVisibilidad(usuario),
-        ...this.construirFiltroConsulta(filtros),
-      },
+      where,
       include: SOLICITUD_INCLUDE,
       orderBy: [{ creadoEn: 'desc' }],
     });
@@ -603,6 +605,24 @@ export class SolicitudesService {
             ],
           }
         : {}),
+    };
+  }
+
+  private combinarFiltrosSolicitud(
+    ...filtros: Prisma.SolicitudWhereInput[]
+  ): Prisma.SolicitudWhereInput {
+    const filtrosActivos = filtros.filter((filtro) => Object.keys(filtro).length);
+
+    if (filtrosActivos.length === 0) {
+      return {};
+    }
+
+    if (filtrosActivos.length === 1) {
+      return filtrosActivos[0];
+    }
+
+    return {
+      AND: filtrosActivos,
     };
   }
 
