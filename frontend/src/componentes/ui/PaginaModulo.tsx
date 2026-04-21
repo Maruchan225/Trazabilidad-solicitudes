@@ -1,8 +1,5 @@
-import { Button, Card, Col, Row, Space, Statistic, Typography } from 'antd';
+import { Card, Col, Row, Space, Statistic, Typography } from 'antd';
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAutenticacion } from '@/ganchos/useAutenticacion';
-import { Icono } from '@/componentes/ui/Icono';
 
 type TarjetaResumen = {
   titulo: string;
@@ -22,24 +19,9 @@ export function PaginaModulo({
   tarjetas = [],
   children,
 }: PaginaModuloProps) {
-  const navigate = useNavigate();
-  const { sesion } = useAutenticacion();
-
-  function volver() {
-    if (window.history.length > 1) {
-      navigate(-1);
-      return;
-    }
-
-    navigate(sesion?.usuario.rol === 'TRABAJADOR' ? '/solicitudes' : '/dashboard');
-  }
-
   return (
     <Space direction="vertical" size={24} className="w-full">
       <div>
-        <Button icon={<Icono nombre="flecha-izquierda" />} onClick={volver} className="!mb-4">
-          Volver
-        </Button>
         <Typography.Title level={2} className="!mb-2 !text-black">
           {titulo}
         </Typography.Title>

@@ -312,7 +312,7 @@ export function PaginaDetalleSolicitud() {
   return (
     <PaginaModulo
       titulo={`Detalle de Solicitud #${id ?? ''}`}
-      descripcion="Vista conectada al backend para mostrar informacion base e historial."
+      descripcion=""
     >
       <EstadoConsulta
         loading={consulta.loading}
