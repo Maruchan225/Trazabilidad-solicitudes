@@ -8,6 +8,7 @@ import type { Usuario } from '@/tipos/usuarios';
 import {
   OPCIONES_PRIORIDAD_SOLICITUD,
   mapearOpcionesAreas,
+  mapearOpcionesTrabajadores,
   mapearOpcionesTiposSolicitud,
 } from '@/utilidades/opciones';
 
@@ -109,10 +110,7 @@ export function FormularioSolicitud({
               ? 'Seleccione un trabajador'
               : 'Seleccione un area primero'
           }
-          options={trabajadoresDisponibles.map((usuario) => ({
-            label: `${usuario.nombres} ${usuario.apellidos}`,
-            value: usuario.id,
-          }))}
+          options={mapearOpcionesTrabajadores(trabajadoresDisponibles)}
         />
       </Form.Item>
       <Form.Item label="Comentario inicial" name="comentario">

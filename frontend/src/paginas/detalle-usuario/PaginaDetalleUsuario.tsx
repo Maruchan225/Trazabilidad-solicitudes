@@ -176,7 +176,6 @@ export function PaginaDetalleUsuario() {
                   {
                     title: 'Estado',
                     dataIndex: 'estadoActual',
-                    sorter: (a, b) => a.estadoActual.localeCompare(b.estadoActual),
                     render: (_estado: string, record) => (
                       <TagEstadoSolicitud
                         estado={record.estadoActual}
@@ -193,7 +192,6 @@ export function PaginaDetalleUsuario() {
                   {
                     title: 'Prioridad',
                     dataIndex: 'prioridad',
-                    sorter: (a, b) => a.prioridad.localeCompare(b.prioridad),
                     render: (prioridad) => <TagPrioridad prioridad={prioridad} />,
                   },
                 ]}

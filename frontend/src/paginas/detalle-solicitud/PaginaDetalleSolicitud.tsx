@@ -34,6 +34,7 @@ import { solicitudesService } from '@/servicios/solicitudes/solicitudes.service'
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
 import type { HistorialSolicitud } from '@/tipos/solicitudes';
 import { obtenerMensajeError } from '@/utilidades/crud';
+import { formatearFecha, formatearFechaHora } from '@/utilidades/fechas';
 import { esRolTrabajador, puedeGestionarSolicitudes } from '@/utilidades/permisos';
 
 const EXTENSIONES_ADJUNTOS_PERMITIDAS = [
@@ -156,6 +157,10 @@ export function PaginaDetalleSolicitud() {
   const areasDerivables = (areas.data ?? []).filter(
     (area) => area.activo && area.id !== consulta.data?.areaActual.id,
   );
+  const historialCompleto = [...(consulta.data?.historialEntradas ?? [])].reverse();
+  const trabajadorPuedeCambiarEstado =
+    consulta.data?.estadoPersistido !== 'FINALIZADA' &&
+    consulta.data?.estadoPersistido !== 'CERRADA';
 
   function abrirAccion(accion: AccionSolicitud) {
     form.resetFields();
@@ -332,20 +337,27 @@ export function PaginaDetalleSolicitud() {
                     <>
                       <Button onClick={() => abrirAccion('asignar')}>Asignar</Button>
                       <Button onClick={() => abrirAccion('derivar')}>Derivar</Button>
+                      <Button onClick={() => abrirAccion('estado')}>
+                        Cambiar estado
+                      </Button>
                       <Button onClick={() => abrirAccion('cerrar')}>Cerrar</Button>
                     </>
                   ) : null}
                   {esTrabajador ? (
                     <>
-                      <Button onClick={() => abrirAccion('estado')}>
-                        Cambiar estado
-                      </Button>
+                      {trabajadorPuedeCambiarEstado ? (
+                        <Button onClick={() => abrirAccion('estado')}>
+                          Cambiar estado
+                        </Button>
+                      ) : null}
                       <Button onClick={() => abrirAccion('observacion')}>
                         Observacion
                       </Button>
-                      <Button onClick={() => abrirAccion('finalizar')}>
-                        Finalizar
-                      </Button>
+                      {trabajadorPuedeCambiarEstado ? (
+                        <Button onClick={() => abrirAccion('finalizar')}>
+                          Finalizar
+                        </Button>
+                      ) : null}
                     </>
                   ) : null}
                 </Space>
@@ -367,6 +379,20 @@ export function PaginaDetalleSolicitud() {
                     ) : null}
                   </Space>
                 </Descriptions.Item>
+                <Descriptions.Item label="Fecha de creacion">
+                  {formatearFechaHora(consulta.data?.creadoEn)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Ultima actualizacion">
+                  {formatearFechaHora(consulta.data?.actualizadoEn)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Fecha de vencimiento">
+                  {formatearFecha(consulta.data?.fechaVencimiento)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Fecha de cierre">
+                  {consulta.data?.fechaCierre
+                    ? formatearFechaHora(consulta.data.fechaCierre)
+                    : 'Pendiente'}
+                </Descriptions.Item>
                 <Descriptions.Item label="Area actual">
                   {consulta.data?.areaActual.nombre}
                 </Descriptions.Item>
@@ -384,7 +410,7 @@ export function PaginaDetalleSolicitud() {
           <Col xs={24} xl={9}>
             <Space direction="vertical" size={16} className="w-full">
               <Card className="rounded-3xl" title="Descripcion">
-                <Typography.Paragraph className="!mb-0">
+                <Typography.Paragraph className="!mb-0 max-h-[220px] overflow-y-auto pr-1">
                   {consulta.data?.descripcion}
                 </Typography.Paragraph>
               </Card>
@@ -474,14 +500,22 @@ export function PaginaDetalleSolicitud() {
                   />
                 </EstadoConsulta>
               </Card>
-              <Card className="rounded-3xl" title="Historial reciente">
-                <Space direction="vertical" className="w-full">
-                  {consulta.data?.historialEntradas.slice(0, 5).map((item) => (
+              <Card className="rounded-3xl" title="Historial">
+                <Space
+                  direction="vertical"
+                  className="max-h-[520px] w-full overflow-y-auto pr-1"
+                >
+                  {historialCompleto.map((item) => (
                     <div
                       key={item.id}
                       className="rounded-2xl border border-municipal-100 p-3"
                     >
-                      <Typography.Text strong>{item.accion}</Typography.Text>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Typography.Text strong>{item.accion}</Typography.Text>
+                        <Typography.Text className="!text-xs !text-black/55">
+                          {formatearFechaHora(item.creadoEn)}
+                        </Typography.Text>
+                      </div>
                       <Typography.Paragraph className="!mb-0 !mt-2">
                         {describirEntradaHistorial(item)}
                       </Typography.Paragraph>
@@ -512,6 +546,7 @@ export function PaginaDetalleSolicitud() {
           areaDestinoSeleccionada={areaDestinoSeleccionada}
           loadingAreas={areas.loading}
           loadingUsuarios={usuarios.loading}
+          esGestion={puedeGestionar}
           onFinish={(values) => void ejecutarAccion(values)}
         />
       </Modal>

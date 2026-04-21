@@ -5,7 +5,9 @@ import type { EstadoSolicitud } from '@/tipos/comun';
 import type { Usuario } from '@/tipos/usuarios';
 import {
   OPCIONES_ESTADO_EDITABLE_SOLICITUD,
+  OPCIONES_ESTADO_GESTION_SOLICITUD,
   mapearOpcionesAreas,
+  mapearOpcionesTrabajadores,
 } from '@/utilidades/opciones';
 
 export type AccionSolicitud =
@@ -32,6 +34,7 @@ type FormularioAccionSolicitudProps = {
   areaDestinoSeleccionada?: number;
   loadingAreas?: boolean;
   loadingUsuarios?: boolean;
+  esGestion?: boolean;
   onFinish: (values: FormularioAccionSolicitudValores) => void;
 };
 
@@ -53,6 +56,7 @@ export function FormularioAccionSolicitud({
   areaDestinoSeleccionada,
   loadingAreas = false,
   loadingUsuarios = false,
+  esGestion = false,
   onFinish,
 }: FormularioAccionSolicitudProps) {
   return (
@@ -65,10 +69,7 @@ export function FormularioAccionSolicitud({
         >
           <Select
             loading={loadingUsuarios}
-            options={trabajadoresArea.map((usuario) => ({
-              label: `${usuario.nombres} ${usuario.apellidos}`,
-              value: usuario.id,
-            }))}
+            options={mapearOpcionesTrabajadores(trabajadoresArea)}
           />
         </Form.Item>
       ) : null}
@@ -101,10 +102,7 @@ export function FormularioAccionSolicitud({
                 ? 'Seleccione un trabajador'
                 : 'Seleccione el area destino primero'
             }
-            options={trabajadoresAreaDestino.map((usuario) => ({
-              label: `${usuario.nombres} ${usuario.apellidos}`,
-              value: usuario.id,
-            }))}
+            options={mapearOpcionesTrabajadores(trabajadoresAreaDestino)}
           />
         </Form.Item>
       ) : null}
@@ -115,7 +113,13 @@ export function FormularioAccionSolicitud({
           name="estado"
           rules={[{ required: true, message: 'Seleccione el estado' }]}
         >
-          <Select<EstadoSolicitud> options={OPCIONES_ESTADO_EDITABLE_SOLICITUD} />
+          <Select<EstadoSolicitud>
+            options={
+              esGestion
+                ? OPCIONES_ESTADO_GESTION_SOLICITUD
+                : OPCIONES_ESTADO_EDITABLE_SOLICITUD
+            }
+          />
         </Form.Item>
       ) : null}
 

@@ -10,6 +10,7 @@ import { access, unlink } from 'fs/promises';
 import type { Express } from 'express';
 import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { handlePrismaError } from '../comun/prisma-error.util';
+import { construirFiltroVisibilidadSolicitudes } from '../comun/visibilidad-solicitudes.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -25,7 +26,7 @@ export class AdjuntosService {
       throw new BadRequestException('Debe adjuntar un archivo valido');
     }
 
-    const solicitud = await this.ensureSolicitudVisible(solicitudId, usuario);
+    const solicitud = await this.asegurarSolicitudVisible(solicitudId, usuario);
 
     try {
       const adjuntoCreado = await this.prisma.$transaction(async (tx) => {
@@ -42,17 +43,15 @@ export class AdjuntosService {
           include: this.adjuntoInclude,
         });
 
-        await tx.historialSolicitud.create({
-          data: {
-            solicitudId,
-            usuarioId: usuario.id,
-            accion: AccionHistorialSolicitud.ADJUNTO_SUBIDO,
-            estadoOrigen: solicitud.estado,
-            estadoDestino: solicitud.estado,
-            areaDestinoId: solicitud.areaActualId,
-            asignadoDestinoId: solicitud.asignadoAId,
-            comentario: `Adjunto subido: ${archivo.originalname}`,
-          },
+        await this.crearHistorialAdjunto(tx, {
+          solicitudId,
+          usuarioId: usuario.id,
+          accion: AccionHistorialSolicitud.ADJUNTO_SUBIDO,
+          estadoOrigen: solicitud.estado,
+          estadoDestino: solicitud.estado,
+          areaDestinoId: solicitud.areaActualId,
+          asignadoDestinoId: solicitud.asignadoAId,
+          comentario: `Adjunto subido: ${archivo.originalname}`,
         });
 
         return adjunto;
@@ -65,7 +64,7 @@ export class AdjuntosService {
   }
 
   async listarPorSolicitud(solicitudId: number, usuario: UsuarioToken) {
-    await this.ensureSolicitudVisible(solicitudId, usuario);
+    await this.asegurarSolicitudVisible(solicitudId, usuario);
 
     return this.prisma.adjunto.findMany({
       where: {
@@ -79,12 +78,12 @@ export class AdjuntosService {
   }
 
   async obtenerInformacion(id: number, usuario: UsuarioToken) {
-    const adjunto = await this.ensureAdjuntoVisible(id, usuario);
+    const adjunto = await this.asegurarAdjuntoVisible(id, usuario);
     return adjunto;
   }
 
   async obtenerArchivoAdjunto(id: number, usuario: UsuarioToken) {
-    const adjunto = await this.ensureAdjuntoVisible(id, usuario);
+    const adjunto = await this.asegurarAdjuntoVisible(id, usuario);
 
     try {
       await access(adjunto.ruta);
@@ -107,51 +106,34 @@ export class AdjuntosService {
   }
 
   async eliminarAdjunto(id: number, usuario: UsuarioToken) {
-    const adjunto = await this.ensureAdjuntoVisible(id, usuario);
-
-    if (
-      usuario.rol === RolUsuario.TRABAJADOR &&
-      adjunto.subidoPorId !== usuario.id
-    ) {
-      throw new ForbiddenException(
-        'Solo puede eliminar adjuntos que usted haya subido',
-      );
-    }
+    const adjunto = await this.asegurarAdjuntoVisible(id, usuario);
+    this.validarPermisoEliminacionAdjunto(adjunto.subidoPorId, usuario);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.adjunto.delete({
         where: { id },
       });
 
-      await tx.historialSolicitud.create({
-        data: {
-          solicitudId: adjunto.solicitudId,
-          usuarioId: usuario.id,
-          accion: AccionHistorialSolicitud.ADJUNTO_ELIMINADO,
-          estadoOrigen: adjunto.solicitud.estado,
-          estadoDestino: adjunto.solicitud.estado,
-          areaDestinoId: adjunto.solicitud.areaActualId,
-          asignadoDestinoId: adjunto.solicitud.asignadoAId,
-          comentario: `Adjunto eliminado: ${adjunto.nombreOriginal}`,
-        },
+      await this.crearHistorialAdjunto(tx, {
+        solicitudId: adjunto.solicitudId,
+        usuarioId: usuario.id,
+        accion: AccionHistorialSolicitud.ADJUNTO_ELIMINADO,
+        estadoOrigen: adjunto.solicitud.estado,
+        estadoDestino: adjunto.solicitud.estado,
+        areaDestinoId: adjunto.solicitud.areaActualId,
+        asignadoDestinoId: adjunto.solicitud.asignadoAId,
+        comentario: `Adjunto eliminado: ${adjunto.nombreOriginal}`,
       });
     });
 
-    try {
-      await unlink(adjunto.ruta);
-    } catch (error) {
-      const codigo = (error as NodeJS.ErrnoException).code;
-      if (codigo !== 'ENOENT') {
-        throw error;
-      }
-    }
+    await this.eliminarArchivoSiExiste(adjunto.ruta);
 
     return {
       message: `Adjunto ${id} eliminado correctamente`,
     };
   }
 
-  private async ensureSolicitudVisible(
+  private async asegurarSolicitudVisible(
     solicitudId: number,
     usuario: UsuarioToken,
   ) {
@@ -159,7 +141,7 @@ export class AdjuntosService {
       where: {
         id: solicitudId,
         eliminadoEn: null,
-        ...this.construirFiltroVisibilidad(usuario),
+        ...construirFiltroVisibilidadSolicitudes(usuario),
       },
     });
 
@@ -172,13 +154,13 @@ export class AdjuntosService {
     return solicitud;
   }
 
-  private async ensureAdjuntoVisible(id: number, usuario: UsuarioToken) {
+  private async asegurarAdjuntoVisible(id: number, usuario: UsuarioToken) {
     const adjunto = await this.prisma.adjunto.findFirst({
       where: {
         id,
         solicitud: {
           eliminadoEn: null,
-          ...this.construirFiltroVisibilidad(usuario),
+          ...construirFiltroVisibilidadSolicitudes(usuario),
         },
       },
       include: {
@@ -194,16 +176,34 @@ export class AdjuntosService {
     return adjunto;
   }
 
-  private construirFiltroVisibilidad(
+  private validarPermisoEliminacionAdjunto(
+    subidoPorId: number | null,
     usuario: UsuarioToken,
-  ): Prisma.SolicitudWhereInput {
-    if (usuario.rol === RolUsuario.TRABAJADOR) {
-      return {
-        OR: [{ asignadoAId: usuario.id }, { areaActualId: usuario.areaId }],
-      };
+  ) {
+    if (usuario.rol === RolUsuario.TRABAJADOR && subidoPorId !== usuario.id) {
+      throw new ForbiddenException(
+        'Solo puede eliminar adjuntos que usted haya subido',
+      );
     }
+  }
 
-    return {};
+  private async eliminarArchivoSiExiste(ruta: string) {
+    try {
+      await unlink(ruta);
+    } catch (error) {
+      const codigo = (error as NodeJS.ErrnoException).code;
+
+      if (codigo !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  private crearHistorialAdjunto(
+    tx: Prisma.TransactionClient,
+    data: Prisma.HistorialSolicitudUncheckedCreateInput,
+  ) {
+    return tx.historialSolicitud.create({ data });
   }
 
   private readonly adjuntoInclude = {

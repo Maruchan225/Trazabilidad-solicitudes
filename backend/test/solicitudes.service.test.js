@@ -92,6 +92,200 @@ test('SolicitudesService.cerrarSolicitud exige estado FINALIZADA', async () => {
   );
 });
 
+test('SolicitudesService.cambiarEstadoSolicitud no permite cambios si la solicitud ya fue finalizada', async () => {
+  const prisma = {
+    usuario: {
+      findUnique: async () => ({
+        id: 2,
+        activo: true,
+      }),
+    },
+    solicitud: {
+      findFirst: async () => ({
+        id: 12,
+        estado: EstadoSolicitud.FINALIZADA,
+        prioridad: PrioridadSolicitud.MEDIA,
+        fechaVencimiento: new Date(),
+        fechaCierre: null,
+        creadoPorId: 1,
+        asignadoAId: 2,
+        areaActualId: 3,
+        tipoSolicitudId: 4,
+        creadoEn: new Date(),
+        actualizadoEn: new Date(),
+        eliminadoEn: null,
+        creadoPor: { id: 1, nombres: 'A', apellidos: 'B', area: { id: 1 } },
+        asignadoA: { id: 2, nombres: 'C', apellidos: 'D', area: { id: 3 } },
+        areaActual: { id: 3, nombre: 'Obras' },
+        tipoSolicitud: { id: 4, nombre: 'Oficio' },
+      }),
+    },
+  };
+
+  const service = new SolicitudesService(prisma);
+
+  await assert.rejects(
+    service.cambiarEstadoSolicitud(
+      12,
+      {
+        estado: EstadoSolicitud.EN_PROCESO,
+        comentario: 'Intento de reapertura',
+      },
+      {
+        id: 2,
+        correo: 'trabajador@demo.cl',
+        rol: RolUsuario.TRABAJADOR,
+        areaId: 3,
+      },
+    ),
+    /solo puede ser cerrada por un encargado o reemplazo/i,
+  );
+});
+
+test('SolicitudesService.cambiarEstadoSolicitud permite a un encargado actualizar una solicitud finalizada', async () => {
+  let estadoActualizado;
+  let historialCreado;
+
+  const prisma = {
+    usuario: {
+      findUnique: async () => ({
+        id: 1,
+        activo: true,
+      }),
+      findMany: async () => [],
+    },
+    solicitud: {
+      findFirst: async () => ({
+        id: 15,
+        estado: EstadoSolicitud.FINALIZADA,
+        prioridad: PrioridadSolicitud.MEDIA,
+        fechaVencimiento: new Date(),
+        fechaCierre: null,
+        creadoPorId: 1,
+        asignadoAId: 2,
+        areaActualId: 3,
+        tipoSolicitudId: 4,
+        creadoEn: new Date(),
+        actualizadoEn: new Date(),
+        eliminadoEn: null,
+        creadoPor: { id: 1, nombres: 'A', apellidos: 'B', area: { id: 1 } },
+        asignadoA: { id: 2, nombres: 'C', apellidos: 'D', area: { id: 3 } },
+        areaActual: { id: 3, nombre: 'Obras' },
+        tipoSolicitud: { id: 4, nombre: 'Oficio' },
+      }),
+      update: async ({ data }) => {
+        estadoActualizado = data.estado;
+        return {};
+      },
+    },
+    historialSolicitud: {
+      create: async ({ data }) => {
+        historialCreado = data;
+        return data;
+      },
+    },
+    $transaction: async (callback) =>
+      callback({
+        solicitud: prisma.solicitud,
+        historialSolicitud: prisma.historialSolicitud,
+      }),
+  };
+
+  const service = new SolicitudesService(prisma);
+  service.verDetalle = async () => ({ id: 15, estadoActual: EstadoSolicitud.EN_PROCESO });
+
+  await service.cambiarEstadoSolicitud(
+    15,
+    {
+      estado: EstadoSolicitud.EN_PROCESO,
+      comentario: 'Se reabre para nueva revision',
+    },
+    {
+      id: 1,
+      correo: 'encargado@demo.cl',
+      rol: RolUsuario.ENCARGADO,
+      areaId: 1,
+    },
+  );
+
+  assert.equal(estadoActualizado, EstadoSolicitud.EN_PROCESO);
+  assert.equal(historialCreado.accion, 'ESTADO_CAMBIADO');
+  assert.equal(historialCreado.estadoOrigen, EstadoSolicitud.FINALIZADA);
+  assert.equal(historialCreado.estadoDestino, EstadoSolicitud.EN_PROCESO);
+});
+
+test('SolicitudesService.cambiarEstadoSolicitud permite a gestion marcar una solicitud como FINALIZADA', async () => {
+  let estadoActualizado;
+  let historialCreado;
+
+  const prisma = {
+    usuario: {
+      findUnique: async () => ({
+        id: 1,
+        activo: true,
+      }),
+      findMany: async () => [],
+    },
+    solicitud: {
+      findFirst: async () => ({
+        id: 18,
+        estado: EstadoSolicitud.EN_PROCESO,
+        prioridad: PrioridadSolicitud.MEDIA,
+        fechaVencimiento: new Date(),
+        fechaCierre: null,
+        creadoPorId: 1,
+        asignadoAId: 2,
+        areaActualId: 3,
+        tipoSolicitudId: 4,
+        creadoEn: new Date(),
+        actualizadoEn: new Date(),
+        eliminadoEn: null,
+        creadoPor: { id: 1, nombres: 'A', apellidos: 'B', area: { id: 1 } },
+        asignadoA: { id: 2, nombres: 'C', apellidos: 'D', area: { id: 3 } },
+        areaActual: { id: 3, nombre: 'Obras' },
+        tipoSolicitud: { id: 4, nombre: 'Oficio' },
+      }),
+      update: async ({ data }) => {
+        estadoActualizado = data.estado;
+        return {};
+      },
+    },
+    historialSolicitud: {
+      create: async ({ data }) => {
+        historialCreado = data;
+        return data;
+      },
+    },
+    $transaction: async (callback) =>
+      callback({
+        solicitud: prisma.solicitud,
+        historialSolicitud: prisma.historialSolicitud,
+      }),
+  };
+
+  const service = new SolicitudesService(prisma);
+  service.verDetalle = async () => ({ id: 18, estadoActual: EstadoSolicitud.FINALIZADA });
+
+  await service.cambiarEstadoSolicitud(
+    18,
+    {
+      estado: EstadoSolicitud.FINALIZADA,
+      comentario: 'Se marca como finalizada desde gestion',
+    },
+    {
+      id: 1,
+      correo: 'encargado@demo.cl',
+      rol: RolUsuario.ENCARGADO,
+      areaId: 1,
+    },
+  );
+
+  assert.equal(estadoActualizado, EstadoSolicitud.FINALIZADA);
+  assert.equal(historialCreado.accion, 'FINALIZADA');
+  assert.equal(historialCreado.estadoOrigen, EstadoSolicitud.EN_PROCESO);
+  assert.equal(historialCreado.estadoDestino, EstadoSolicitud.FINALIZADA);
+});
+
 test('SolicitudesService.listar aplica paginacion opcional sin perder filtros', async () => {
   let findManyArgs;
 

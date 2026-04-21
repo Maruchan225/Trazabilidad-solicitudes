@@ -1,6 +1,7 @@
 import type { Area } from '@/tipos/areas';
 import type { EstadoSolicitud, PrioridadSolicitud, RolUsuario } from '@/tipos/comun';
 import type { TipoSolicitud } from '@/tipos/tiposSolicitud';
+import type { Usuario } from '@/tipos/usuarios';
 
 type Opcion<T extends string | number> = {
   label: string;
@@ -35,6 +36,13 @@ export const OPCIONES_ESTADO_EDITABLE_SOLICITUD: Opcion<EstadoSolicitud>[] = [
   { label: 'Pendiente informacion', value: 'PENDIENTE_INFORMACION' },
 ];
 
+export const OPCIONES_ESTADO_GESTION_SOLICITUD: Opcion<EstadoSolicitud>[] = [
+  { label: 'Ingresada', value: 'INGRESADA' },
+  { label: 'En proceso', value: 'EN_PROCESO' },
+  { label: 'Pendiente informacion', value: 'PENDIENTE_INFORMACION' },
+  { label: 'Finalizada', value: 'FINALIZADA' },
+];
+
 export const OPCIONES_PRIORIDAD_SOLICITUD: Opcion<PrioridadSolicitud>[] = [
   { label: 'Baja', value: 'BAJA' },
   { label: 'Media', value: 'MEDIA' },
@@ -60,4 +68,11 @@ export function mapearOpcionesAreas(areas: Area[]) {
 
 export function mapearOpcionesTiposSolicitud(tipos: TipoSolicitud[]) {
   return tipos.map((tipo) => ({ label: tipo.nombre, value: tipo.id }));
+}
+
+export function mapearOpcionesTrabajadores(usuarios: Usuario[]) {
+  return usuarios.map((usuario) => ({
+    label: `${usuario.nombres} ${usuario.apellidos}`,
+    value: usuario.id,
+  }));
 }

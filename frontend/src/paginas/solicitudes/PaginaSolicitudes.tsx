@@ -1,9 +1,8 @@
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag } from 'antd';
-import { useState } from 'react';
+import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table, Tag } from 'antd';
+import { useDeferredValue, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FormularioSolicitud } from '@/componentes/solicitudes/FormularioSolicitud';
 import { Icono } from '@/componentes/ui/Icono';
-import { EstadoConsulta } from '@/componentes/ui/EstadoConsulta';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
 import { TagEstadoSolicitud } from '@/componentes/ui/tags/TagEstadoSolicitud';
 import { TagPrioridad } from '@/componentes/ui/tags/TagPrioridad';
@@ -20,6 +19,7 @@ import {
   normalizarTextoOpcional,
   normalizarTextoRequerido,
 } from '@/utilidades/crud';
+import { compararFechas, formatearFechaHora } from '@/utilidades/fechas';
 import {
   OPCIONES_ESTADO_SOLICITUD,
   OPCIONES_FILTRO_PRIORIDAD_SOLICITUD,
@@ -36,16 +36,17 @@ export function PaginaSolicitudes() {
   const [tipoFiltro, setTipoFiltro] = useState<number>();
   const [prioridadFiltro, setPrioridadFiltro] = useState<PrioridadSolicitud>();
   const [busqueda, setBusqueda] = useState('');
+  const busquedaDiferida = useDeferredValue(busqueda);
   const consulta = useConsulta(
     () =>
       solicitudesService.listar({
-        busqueda: busqueda.trim() || undefined,
+        busqueda: busquedaDiferida.trim() || undefined,
         estado: estadoFiltro,
         areaId: areaFiltro,
         tipoSolicitudId: tipoFiltro,
         prioridad: prioridadFiltro,
       }),
-    [busqueda, estadoFiltro, areaFiltro, tipoFiltro, prioridadFiltro],
+    [busquedaDiferida, estadoFiltro, areaFiltro, tipoFiltro, prioridadFiltro],
   );
   const areas = useConsulta(() => areasService.listar(), []);
   const tiposSolicitud = useConsulta(() => tiposSolicitudService.listar(), []);
@@ -65,6 +66,15 @@ export function PaginaSolicitudes() {
   );
   const filtrosArea = mapearOpcionesAreas(areasActivas);
   const filtrosTipoSolicitud = mapearOpcionesTiposSolicitud(tiposActivos);
+  const hayFiltrosAplicados =
+    busqueda.trim().length > 0 ||
+    estadoFiltro !== undefined ||
+    areaFiltro !== undefined ||
+    tipoFiltro !== undefined ||
+    prioridadFiltro !== undefined;
+  const mensajeSinResultados = hayFiltrosAplicados
+    ? 'No se encontraron solicitudes con los filtros aplicados.'
+    : 'No hay solicitudes registradas.';
 
   function cerrarModal() {
     setModalAbierto(false);
@@ -116,70 +126,68 @@ export function PaginaSolicitudes() {
           </Space>
         }
       >
-        <EstadoConsulta
-          loading={consulta.loading}
-          error={consulta.error}
-          data={consulta.data}
-          empty={solicitudes.length === 0}
-          emptyDescription="No hay solicitudes para mostrar."
-        >
-          <Space wrap className="mb-4">
-            <Input.Search
-              allowClear
-              className="min-w-64"
-              placeholder="Buscar por ID, titulo, estado, area o tipo"
-              value={busqueda}
-              onChange={(event) => setBusqueda(event.target.value)}
-            />
-            <Select<EstadoSolicitud>
-              allowClear
-              className="min-w-40"
-              placeholder="Filtrar estado"
-              value={estadoFiltro}
-              options={OPCIONES_ESTADO_SOLICITUD}
-              onChange={setEstadoFiltro}
-            />
-            <Select<number>
-              allowClear
-              className="min-w-44"
-              placeholder="Filtrar area"
-              value={areaFiltro}
-              options={filtrosArea}
-              onChange={setAreaFiltro}
-            />
-            <Select<number>
-              allowClear
-              className="min-w-48"
-              placeholder="Filtrar tipo"
-              value={tipoFiltro}
-              options={filtrosTipoSolicitud}
-              onChange={setTipoFiltro}
-            />
-            <Select<PrioridadSolicitud>
-              allowClear
-              className="min-w-40"
-              placeholder="Filtrar prioridad"
-              value={prioridadFiltro}
-              options={OPCIONES_FILTRO_PRIORIDAD_SOLICITUD}
-              onChange={setPrioridadFiltro}
-            />
-            <Button
-              onClick={() => {
-                setBusqueda('');
-                setEstadoFiltro(undefined);
-                setAreaFiltro(undefined);
-                setTipoFiltro(undefined);
-                setPrioridadFiltro(undefined);
-              }}
-            >
-              Limpiar filtros
-            </Button>
-          </Space>
+        <Space wrap className="mb-4">
+          <Input.Search
+            allowClear
+            className="min-w-64"
+            placeholder="Buscar por ID, titulo, descripcion, area, tipo o asignado"
+            value={busqueda}
+            onChange={(event) => setBusqueda(event.target.value)}
+          />
+          <Select<EstadoSolicitud>
+            allowClear
+            className="min-w-40"
+            placeholder="Filtrar estado"
+            value={estadoFiltro}
+            options={OPCIONES_ESTADO_SOLICITUD}
+            onChange={setEstadoFiltro}
+          />
+          <Select<number>
+            allowClear
+            className="min-w-44"
+            placeholder="Filtrar area"
+            value={areaFiltro}
+            options={filtrosArea}
+            onChange={setAreaFiltro}
+          />
+          <Select<number>
+            allowClear
+            className="min-w-48"
+            placeholder="Filtrar tipo"
+            value={tipoFiltro}
+            options={filtrosTipoSolicitud}
+            onChange={setTipoFiltro}
+          />
+          <Select<PrioridadSolicitud>
+            allowClear
+            className="min-w-40"
+            placeholder="Filtrar prioridad"
+            value={prioridadFiltro}
+            options={OPCIONES_FILTRO_PRIORIDAD_SOLICITUD}
+            onChange={setPrioridadFiltro}
+          />
+          <Button
+            onClick={() => {
+              setBusqueda('');
+              setEstadoFiltro(undefined);
+              setAreaFiltro(undefined);
+              setTipoFiltro(undefined);
+              setPrioridadFiltro(undefined);
+            }}
+          >
+            Limpiar filtros
+          </Button>
+        </Space>
 
+        {consulta.error ? (
+          <Alert type="error" message={consulta.error} showIcon />
+        ) : (
           <Table<Solicitud>
+            loading={consulta.loading}
             rowKey="id"
             dataSource={solicitudes}
             pagination={{ pageSize: 8 }}
+            locale={{ emptyText: mensajeSinResultados }}
             columns={[
               {
                 title: 'ID',
@@ -195,9 +203,15 @@ export function PaginaSolicitudes() {
                 ),
               },
               {
+                title: 'Fecha de creacion',
+                dataIndex: 'creadoEn',
+                defaultSortOrder: 'descend',
+                sorter: (a, b) => compararFechas(a.creadoEn, b.creadoEn),
+                render: (creadoEn: string) => formatearFechaHora(creadoEn),
+              },
+              {
                 title: 'Estado',
                 dataIndex: 'estadoActual',
-                sorter: (a, b) => a.estadoActual.localeCompare(b.estadoActual),
                 render: (estado: string, record) => (
                   <Space>
                     <TagEstadoSolicitud
@@ -209,6 +223,14 @@ export function PaginaSolicitudes() {
                     ) : null}
                   </Space>
                 ),
+              },
+              {
+                title: 'Fecha de vencimiento',
+                dataIndex: 'fechaVencimiento',
+                sorter: (a, b) =>
+                  compararFechas(a.fechaVencimiento, b.fechaVencimiento),
+                render: (fechaVencimiento: string) =>
+                  formatearFechaHora(fechaVencimiento),
               },
               {
                 title: 'Area',
@@ -225,14 +247,13 @@ export function PaginaSolicitudes() {
               {
                 title: 'Prioridad',
                 dataIndex: 'prioridad',
-                sorter: (a, b) => a.prioridad.localeCompare(b.prioridad),
                 render: (prioridad: PrioridadSolicitud) => (
                   <TagPrioridad prioridad={prioridad} />
                 ),
               },
             ]}
           />
-        </EstadoConsulta>
+        )}
       </Card>
 
       <Modal

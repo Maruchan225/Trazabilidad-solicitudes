@@ -82,7 +82,7 @@ export class SolicitudesController {
   }
 
   @Patch(':id/estado')
-  @Roles(RolUsuario.TRABAJADOR)
+  @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO, RolUsuario.TRABAJADOR)
   cambiarEstado(
     @Param('id', ParseIntPipe) id: number,
     @Body() cambiarEstadoSolicitudDto: CambiarEstadoSolicitudDto,

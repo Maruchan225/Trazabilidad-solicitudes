@@ -8,7 +8,7 @@ export class ReportesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async obtenerResumenGeneral(filtros: FiltroReportesDto) {
-    const where = this.buildWhere(filtros);
+    const where = this.construirFiltroReporte(filtros);
     const [totalSolicitudes, solicitudesPorEstado, proximasAVencer] =
       await Promise.all([
         this.prisma.solicitud.count({ where }),
@@ -19,16 +19,7 @@ export class ReportesService {
             _all: true,
           },
         }),
-        this.prisma.solicitud.count({
-          where: {
-            ...where,
-            fechaCierre: null,
-            fechaVencimiento: {
-              gte: new Date(),
-              lte: this.sumarDias(new Date(), 3),
-            },
-          },
-        }),
+        this.prisma.solicitud.count({ where: this.construirFiltroProximasAVencer(where) }),
       ]);
 
     const mapaEstados = new Map(
@@ -49,7 +40,7 @@ export class ReportesService {
   }
 
   async obtenerSolicitudesPorEstado(filtros: FiltroReportesDto) {
-    const where = this.buildWhere(filtros);
+    const where = this.construirFiltroReporte(filtros);
     const [agrupadas, solicitudesVencidas] = await Promise.all([
       this.prisma.solicitud.groupBy({
         by: ['estado'],
@@ -73,7 +64,7 @@ export class ReportesService {
   }
 
   async obtenerSolicitudesPorArea(filtros: FiltroReportesDto) {
-    const where = this.buildWhere(filtros);
+    const where = this.construirFiltroReporte(filtros);
 
     const items = await this.prisma.area.findMany({
       where: filtros.areaId ? { id: filtros.areaId } : undefined,
@@ -100,7 +91,7 @@ export class ReportesService {
   }
 
   async obtenerCargaPorTrabajador(filtros: FiltroReportesDto) {
-    const where = this.buildWhere(filtros);
+    const where = this.construirFiltroReporte(filtros);
 
     const trabajadores = await this.prisma.usuario.findMany({
       where: {
@@ -157,7 +148,7 @@ export class ReportesService {
   }
 
   async obtenerTiempoPromedioRespuesta(filtros: FiltroReportesDto) {
-    const where = this.buildWhere(filtros);
+    const where = this.construirFiltroReporte(filtros);
     const solicitudesCerradas = await this.prisma.solicitud.findMany({
       where: {
         ...where,
@@ -207,16 +198,10 @@ export class ReportesService {
   }
 
   async obtenerSolicitudesVencidas(filtros: FiltroReportesDto) {
-    const where = this.buildWhere(filtros);
+    const where = this.construirFiltroReporte(filtros);
 
     const solicitudes = await this.prisma.solicitud.findMany({
-      where: {
-        ...where,
-        fechaCierre: null,
-        fechaVencimiento: {
-          lt: new Date(),
-        },
-      },
+      where: this.construirFiltroSolicitudesVencidas(where),
       include: {
         areaActual: true,
         asignadoA: {
@@ -252,7 +237,7 @@ export class ReportesService {
   }
 
   async obtenerSolicitudesPorTipo(filtros: FiltroReportesDto) {
-    const where = this.buildWhere(filtros);
+    const where = this.construirFiltroReporte(filtros);
 
     const items = await this.prisma.tipoSolicitud.findMany({
       where: filtros.tipoSolicitudId
@@ -280,21 +265,10 @@ export class ReportesService {
     }));
   }
 
-  private buildWhere(filtros: FiltroReportesDto): Prisma.SolicitudWhereInput {
-    const fechaDesde = filtros.fechaDesde
-      ? new Date(filtros.fechaDesde)
-      : undefined;
-    const fechaHasta = filtros.fechaHasta
-      ? new Date(filtros.fechaHasta)
-      : undefined;
-
-    if (fechaDesde && Number.isNaN(fechaDesde.getTime())) {
-      throw new BadRequestException('fechaDesde no es una fecha valida');
-    }
-
-    if (fechaHasta && Number.isNaN(fechaHasta.getTime())) {
-      throw new BadRequestException('fechaHasta no es una fecha valida');
-    }
+  private construirFiltroReporte(
+    filtros: FiltroReportesDto,
+  ): Prisma.SolicitudWhereInput {
+    const { fechaDesde, fechaHasta } = this.obtenerRangoFechasValido(filtros);
 
     if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
       throw new BadRequestException(
@@ -325,14 +299,56 @@ export class ReportesService {
 
   private async contarSolicitudesVencidas(where: Prisma.SolicitudWhereInput) {
     return this.prisma.solicitud.count({
-      where: {
-        ...where,
-        fechaCierre: null,
-        fechaVencimiento: {
-          lt: new Date(),
-        },
-      },
+      where: this.construirFiltroSolicitudesVencidas(where),
     });
+  }
+
+  private obtenerRangoFechasValido(filtros: FiltroReportesDto) {
+    const fechaDesde = this.parsearFechaOpcional(
+      filtros.fechaDesde,
+      'fechaDesde no es una fecha valida',
+    );
+    const fechaHasta = this.parsearFechaOpcional(
+      filtros.fechaHasta,
+      'fechaHasta no es una fecha valida',
+    );
+
+    return { fechaDesde, fechaHasta };
+  }
+
+  private parsearFechaOpcional(valor: string | undefined, mensajeError: string) {
+    if (!valor) {
+      return undefined;
+    }
+
+    const fecha = new Date(valor);
+
+    if (Number.isNaN(fecha.getTime())) {
+      throw new BadRequestException(mensajeError);
+    }
+
+    return fecha;
+  }
+
+  private construirFiltroSolicitudesVencidas(where: Prisma.SolicitudWhereInput) {
+    return {
+      ...where,
+      fechaCierre: null,
+      fechaVencimiento: {
+        lt: new Date(),
+      },
+    };
+  }
+
+  private construirFiltroProximasAVencer(where: Prisma.SolicitudWhereInput) {
+    return {
+      ...where,
+      fechaCierre: null,
+      fechaVencimiento: {
+        gte: new Date(),
+        lte: this.sumarDias(new Date(), 3),
+      },
+    };
   }
 
   private esSolicitudVencida(solicitud: {

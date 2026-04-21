@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { handlePrismaError } from '../comun/prisma-error.util';
+import { construirFiltroVisibilidadSolicitudes } from '../comun/visibilidad-solicitudes.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AgregarObservacionSolicitudDto } from './dto/agregar-observacion-solicitud.dto';
 import { AsignarSolicitudDto } from './dto/asignar-solicitud.dto';
@@ -51,6 +52,14 @@ type SolicitudPresentable = {
   fechaCierre: Date | null;
 };
 
+type DatosHistorialSolicitud = Prisma.HistorialSolicitudUncheckedCreateInput;
+
+const ESTADOS_REQUIEREN_ASIGNADO = new Set<EstadoSolicitud>([
+  EstadoSolicitud.EN_PROCESO,
+  EstadoSolicitud.PENDIENTE_INFORMACION,
+  EstadoSolicitud.FINALIZADA,
+]);
+
 @Injectable()
 export class SolicitudesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -69,11 +78,9 @@ export class SolicitudesService {
       );
     }
 
-    const fechaVencimiento = new Date(createSolicitudDto.fechaVencimiento);
-
-    if (Number.isNaN(fechaVencimiento.getTime())) {
-      throw new BadRequestException('La fecha de vencimiento no es valida');
-    }
+    const fechaVencimiento = this.parsearFechaVencimiento(
+      createSolicitudDto.fechaVencimiento,
+    );
 
     const data: Prisma.SolicitudCreateInput = {
       titulo: createSolicitudDto.titulo,
@@ -126,7 +133,7 @@ export class SolicitudesService {
 
     const where = this.combinarFiltrosSolicitud(
       ACTIVE_REQUEST_WHERE,
-      this.construirFiltroVisibilidad(usuario),
+      construirFiltroVisibilidadSolicitudes(usuario),
       this.construirFiltroConsulta(filtros),
     );
 
@@ -148,7 +155,7 @@ export class SolicitudesService {
       where: {
         id,
         ...ACTIVE_REQUEST_WHERE,
-        ...this.construirFiltroVisibilidad(usuario),
+        ...construirFiltroVisibilidadSolicitudes(usuario),
       },
       include: {
         ...SOLICITUD_INCLUDE,
@@ -203,22 +210,19 @@ export class SolicitudesService {
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.solicitud.update({
-        where: { id },
-        data: {
-          asignadoAId: asignadoA.id,
-        },
-      });
-
-      await this.crearEntradaHistorial(tx, {
+    await this.actualizarSolicitudConHistorial({
+      solicitudId: id,
+      datosSolicitud: {
+        asignadoAId: asignadoA.id,
+      },
+      historial: {
         solicitudId: id,
         usuarioId: usuario.id,
         accion: AccionHistorialSolicitud.ASIGNADA,
         asignadoOrigenId: solicitud.asignadoAId,
         asignadoDestinoId: asignadoA.id,
         comentario: asignarSolicitudDto.comentario,
-      });
+      },
     });
 
     return this.verDetalle(id, usuario);
@@ -245,17 +249,14 @@ export class SolicitudesService {
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.solicitud.update({
-        where: { id },
-        data: {
-          areaActualId: derivarSolicitudDto.areaDestinoId,
-          asignadoAId: asignadoA.id,
-          estado: EstadoSolicitud.DERIVADA,
-        },
-      });
-
-      await this.crearEntradaHistorial(tx, {
+    await this.actualizarSolicitudConHistorial({
+      solicitudId: id,
+      datosSolicitud: {
+        areaActualId: derivarSolicitudDto.areaDestinoId,
+        asignadoAId: asignadoA.id,
+        estado: EstadoSolicitud.DERIVADA,
+      },
+      historial: {
         solicitudId: id,
         usuarioId: usuario.id,
         accion: AccionHistorialSolicitud.DERIVADA,
@@ -266,7 +267,7 @@ export class SolicitudesService {
         asignadoOrigenId: solicitud.asignadoAId,
         asignadoDestinoId: asignadoA.id,
         comentario: derivarSolicitudDto.comentario,
-      });
+      },
     });
 
     return this.verDetalle(id, usuario);
@@ -282,52 +283,27 @@ export class SolicitudesService {
     this.validarTrabajadorPuedeOperarSolicitud(solicitud, usuario);
     this.validarSolicitudEditable(solicitud);
 
-    if (
-      cambiarEstadoSolicitudDto.estado === EstadoSolicitud.CERRADA ||
-      cambiarEstadoSolicitudDto.estado === EstadoSolicitud.FINALIZADA
-    ) {
-      throw new BadRequestException(
-        'Use los metodos finalizarSolicitud o cerrarSolicitud para estos cambios de estado',
-      );
-    }
-
-    if (cambiarEstadoSolicitudDto.estado === EstadoSolicitud.VENCIDA) {
-      throw new BadRequestException(
-        'El estado VENCIDA se determina automaticamente segun la fecha de vencimiento',
-      );
-    }
-
-    if (cambiarEstadoSolicitudDto.estado === EstadoSolicitud.DERIVADA) {
-      throw new BadRequestException(
-        'Use el metodo derivarSolicitudAArea para derivar solicitudes',
-      );
-    }
-
-    if (solicitud.estado === cambiarEstadoSolicitudDto.estado) {
-      throw new BadRequestException('La solicitud ya tiene este estado');
-    }
-
-    this.validarAsignacionRequeridaParaEstado(
+    this.validarCambioEstadoPermitido(
+      solicitud,
       cambiarEstadoSolicitudDto.estado,
-      solicitud.asignadoAId,
+      usuario,
     );
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.solicitud.update({
-        where: { id },
-        data: {
-          estado: cambiarEstadoSolicitudDto.estado,
-        },
-      });
-
-      await this.crearEntradaHistorial(tx, {
+    await this.actualizarSolicitudConHistorial({
+      solicitudId: id,
+      datosSolicitud: {
+        estado: cambiarEstadoSolicitudDto.estado,
+      },
+      historial: {
         solicitudId: id,
         usuarioId: usuario.id,
-        accion: AccionHistorialSolicitud.ESTADO_CAMBIADO,
+        accion: this.obtenerAccionHistorialCambioEstado(
+          cambiarEstadoSolicitudDto.estado,
+        ),
         estadoOrigen: solicitud.estado,
         estadoDestino: cambiarEstadoSolicitudDto.estado,
         comentario: cambiarEstadoSolicitudDto.comentario,
-      });
+      },
     });
 
     return this.verDetalle(id, usuario);
@@ -342,17 +318,15 @@ export class SolicitudesService {
     await this.asegurarUsuarioActivoExiste(usuario.id);
     this.validarTrabajadorPuedeVerSolicitud(solicitud, usuario);
 
-    await this.prisma.$transaction(async (tx) => {
-      await this.crearEntradaHistorial(tx, {
-        solicitudId: id,
-        usuarioId: usuario.id,
-        accion: AccionHistorialSolicitud.OBSERVACION,
-        estadoOrigen: solicitud.estado,
-        estadoDestino: solicitud.estado,
-        areaDestinoId: solicitud.areaActualId,
-        asignadoDestinoId: solicitud.asignadoAId,
-        comentario: agregarObservacionSolicitudDto.comentario,
-      });
+    await this.registrarHistorialSolicitud({
+      solicitudId: id,
+      usuarioId: usuario.id,
+      accion: AccionHistorialSolicitud.OBSERVACION,
+      estadoOrigen: solicitud.estado,
+      estadoDestino: solicitud.estado,
+      areaDestinoId: solicitud.areaActualId,
+      asignadoDestinoId: solicitud.asignadoAId,
+      comentario: agregarObservacionSolicitudDto.comentario,
     });
 
     return this.verDetalle(id, usuario);
@@ -376,22 +350,19 @@ export class SolicitudesService {
       throw new BadRequestException('La solicitud ya se encuentra finalizada');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.solicitud.update({
-        where: { id },
-        data: {
-          estado: EstadoSolicitud.FINALIZADA,
-        },
-      });
-
-      await this.crearEntradaHistorial(tx, {
+    await this.actualizarSolicitudConHistorial({
+      solicitudId: id,
+      datosSolicitud: {
+        estado: EstadoSolicitud.FINALIZADA,
+      },
+      historial: {
         solicitudId: id,
         usuarioId: usuario.id,
         accion: AccionHistorialSolicitud.FINALIZADA,
         estadoOrigen: solicitud.estado,
         estadoDestino: EstadoSolicitud.FINALIZADA,
         comentario: finalizarSolicitudDto.comentario,
-      });
+      },
     });
 
     return this.verDetalle(id, usuario);
@@ -415,23 +386,20 @@ export class SolicitudesService {
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.solicitud.update({
-        where: { id },
-        data: {
-          estado: EstadoSolicitud.CERRADA,
-          fechaCierre: new Date(),
-        },
-      });
-
-      await this.crearEntradaHistorial(tx, {
+    await this.actualizarSolicitudConHistorial({
+      solicitudId: id,
+      datosSolicitud: {
+        estado: EstadoSolicitud.CERRADA,
+        fechaCierre: new Date(),
+      },
+      historial: {
         solicitudId: id,
         usuarioId: usuario.id,
         accion: AccionHistorialSolicitud.CERRADA,
         estadoOrigen: solicitud.estado,
         estadoDestino: EstadoSolicitud.CERRADA,
         comentario: cerrarSolicitudDto.comentario,
-      });
+      },
     });
 
     return this.verDetalle(id, usuario);
@@ -445,15 +413,12 @@ export class SolicitudesService {
     const solicitud = await this.asegurarSolicitudActivaExiste(id);
     await this.asegurarUsuarioActivoExiste(actorUsuarioId);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.solicitud.update({
-        where: { id },
-        data: {
-          eliminadoEn: new Date(),
-        },
-      });
-
-      await this.crearEntradaHistorial(tx, {
+    await this.actualizarSolicitudConHistorial({
+      solicitudId: id,
+      datosSolicitud: {
+        eliminadoEn: new Date(),
+      },
+      historial: {
         solicitudId: id,
         usuarioId: actorUsuarioId,
         accion: AccionHistorialSolicitud.ELIMINADA,
@@ -462,7 +427,7 @@ export class SolicitudesService {
         areaDestinoId: solicitud.areaActualId,
         asignadoDestinoId: solicitud.asignadoAId,
         comentario,
-      });
+      },
     });
 
     return {
@@ -543,18 +508,6 @@ export class SolicitudesService {
     }
 
     return asignadoA;
-  }
-
-  private construirFiltroVisibilidad(
-    usuario: UsuarioToken,
-  ): Prisma.SolicitudWhereInput {
-    if (usuario.rol === RolUsuario.TRABAJADOR) {
-      return {
-        OR: [{ asignadoAId: usuario.id }, { areaActualId: usuario.areaId }],
-      };
-    }
-
-    return {};
   }
 
   private construirFiltroConsulta(
@@ -665,21 +618,77 @@ export class SolicitudesService {
     }
   }
 
+  private validarCambioEstadoPermitido(
+    solicitud: Pick<SolicitudBase, 'estado' | 'asignadoAId'>,
+    estadoDestino: EstadoSolicitud,
+    usuario: UsuarioToken,
+  ) {
+    if (
+      this.esTrabajador(usuario) &&
+      solicitud.estado === EstadoSolicitud.FINALIZADA
+    ) {
+      throw new BadRequestException(
+        'La solicitud ya fue finalizada y solo puede ser cerrada por un encargado o reemplazo',
+      );
+    }
+
+    if (estadoDestino === EstadoSolicitud.CERRADA) {
+      throw new BadRequestException(
+        'Use el metodo cerrarSolicitud para estos cambios de estado',
+      );
+    }
+
+    if (
+      this.esTrabajador(usuario) &&
+      estadoDestino === EstadoSolicitud.FINALIZADA
+    ) {
+      throw new BadRequestException(
+        'Use el metodo finalizarSolicitud para marcar la solicitud como FINALIZADA',
+      );
+    }
+
+    if (estadoDestino === EstadoSolicitud.VENCIDA) {
+      throw new BadRequestException(
+        'El estado VENCIDA se determina automaticamente segun la fecha de vencimiento',
+      );
+    }
+
+    if (estadoDestino === EstadoSolicitud.DERIVADA) {
+      throw new BadRequestException(
+        'Use el metodo derivarSolicitudAArea para derivar solicitudes',
+      );
+    }
+
+    if (solicitud.estado === estadoDestino) {
+      throw new BadRequestException('La solicitud ya tiene este estado');
+    }
+
+    this.validarAsignacionRequeridaParaEstado(estadoDestino, solicitud.asignadoAId);
+  }
+
   private validarAsignacionRequeridaParaEstado(
     estado: EstadoSolicitud,
     asignadoAId: number | null,
   ) {
-    const statusesRequiringAssignee = new Set<EstadoSolicitud>([
-      EstadoSolicitud.EN_PROCESO,
-      EstadoSolicitud.PENDIENTE_INFORMACION,
-      EstadoSolicitud.FINALIZADA,
-    ]);
-
-    if (statusesRequiringAssignee.has(estado) && !asignadoAId) {
+    if (ESTADOS_REQUIEREN_ASIGNADO.has(estado) && !asignadoAId) {
       throw new BadRequestException(
         'La solicitud debe estar asignada a un trabajador para usar este estado',
       );
     }
+  }
+
+  private esTrabajador(usuario: UsuarioToken) {
+    return usuario.rol === 'TRABAJADOR';
+  }
+
+  private parsearFechaVencimiento(fecha: string) {
+    const fechaVencimiento = new Date(fecha);
+
+    if (Number.isNaN(fechaVencimiento.getTime())) {
+      throw new BadRequestException('La fecha de vencimiento no es valida');
+    }
+
+    return fechaVencimiento;
   }
 
   private estaSolicitudVencida(solicitud: SolicitudPresentable) {
@@ -749,8 +758,41 @@ export class SolicitudesService {
 
   private crearEntradaHistorial(
     tx: Prisma.TransactionClient,
-    data: Prisma.HistorialSolicitudUncheckedCreateInput,
+    data: DatosHistorialSolicitud,
   ) {
     return tx.historialSolicitud.create({ data });
+  }
+
+  private obtenerAccionHistorialCambioEstado(estadoDestino: EstadoSolicitud) {
+    return estadoDestino === EstadoSolicitud.FINALIZADA
+      ? AccionHistorialSolicitud.FINALIZADA
+      : AccionHistorialSolicitud.ESTADO_CAMBIADO;
+  }
+
+  private async registrarHistorialSolicitud(data: DatosHistorialSolicitud) {
+    await this.prisma.$transaction(async (tx) => {
+      await this.crearEntradaHistorial(tx, data);
+    });
+  }
+
+  private async actualizarSolicitudConHistorial({
+    solicitudId,
+    datosSolicitud,
+    historial,
+  }: {
+    solicitudId: number;
+    datosSolicitud?: Prisma.SolicitudUncheckedUpdateInput;
+    historial: DatosHistorialSolicitud;
+  }) {
+    await this.prisma.$transaction(async (tx) => {
+      if (datosSolicitud) {
+        await tx.solicitud.update({
+          where: { id: solicitudId },
+          data: datosSolicitud,
+        });
+      }
+
+      await this.crearEntradaHistorial(tx, historial);
+    });
   }
 }
