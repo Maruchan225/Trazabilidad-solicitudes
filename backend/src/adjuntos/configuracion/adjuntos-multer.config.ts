@@ -1,8 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import type { Express } from 'express';
 import { diskStorage } from 'multer';
-import { extname, join } from 'path';
+import { extname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { obtenerDirectorioAdjuntos } from './adjuntos-storage.config';
 
 const MIME_TYPES_PERMITIDOS = new Map<string, string>([
   ['application/pdf', '.pdf'],
@@ -16,7 +17,7 @@ const MIME_TYPES_PERMITIDOS = new Map<string, string>([
 ]);
 
 const TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024;
-const DIRECTORIO_ADJUNTOS = join(process.cwd(), 'uploads', 'adjuntos');
+const DIRECTORIO_ADJUNTOS = obtenerDirectorioAdjuntos();
 
 function asegurarDirectorioAdjuntos() {
   if (!existsSync(DIRECTORIO_ADJUNTOS)) {

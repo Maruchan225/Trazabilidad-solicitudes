@@ -1,8 +1,9 @@
 import { Transform } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
 import { EstadoSolicitud, PrioridadSolicitud } from '@prisma/client';
+import { FiltroPaginacionDto } from '../../comun/dto/filtro-paginacion.dto';
 
-export class FiltroSolicitudesDto {
+export class FiltroSolicitudesDto extends FiltroPaginacionDto {
   @IsOptional()
   @IsString()
   busqueda?: string;

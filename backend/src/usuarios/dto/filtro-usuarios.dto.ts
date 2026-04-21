@@ -7,8 +7,9 @@ import {
   IsString,
 } from 'class-validator';
 import { RolUsuario } from '@prisma/client';
+import { FiltroPaginacionDto } from '../../comun/dto/filtro-paginacion.dto';
 
-export class FiltroUsuariosDto {
+export class FiltroUsuariosDto extends FiltroPaginacionDto {
   @IsOptional()
   @IsString()
   busqueda?: string;

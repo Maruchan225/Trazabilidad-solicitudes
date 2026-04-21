@@ -1,4 +1,4 @@
-import type { RolUsuario } from '@/tipos/comun';
+import type { RolUsuario } from '../tipos/comun.js';
 
 const ROLES_GESTION: RolUsuario[] = ['ENCARGADO', 'REEMPLAZO'];
 const RUTAS_PERMITIDAS_TRABAJADOR = ['/solicitudes'];

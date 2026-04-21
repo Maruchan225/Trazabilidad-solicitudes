@@ -1,7 +1,12 @@
 import { ApiError } from '@/servicios/api/client';
 
 export function obtenerMensajeError(error: unknown, mensajePorDefecto: string) {
-  return error instanceof Error ? error.message : mensajePorDefecto;
+  if (!(error instanceof Error)) {
+    return mensajePorDefecto;
+  }
+
+  const mensaje = error.message?.trim();
+  return mensaje ? mensaje : mensajePorDefecto;
 }
 
 export function normalizarTextoRequerido(valor: string) {

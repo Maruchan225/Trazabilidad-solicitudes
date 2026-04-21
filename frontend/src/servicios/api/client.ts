@@ -22,6 +22,26 @@ export class ApiError extends Error {
   }
 }
 
+export function extraerMensajeErrorApi(
+  payload: unknown,
+  mensajePorDefecto: string,
+): string | string[] {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    'message' in payload &&
+    typeof payload.message !== 'undefined'
+  ) {
+    return payload.message as string | string[];
+  }
+
+  if (typeof payload === 'string' && payload.trim()) {
+    return payload;
+  }
+
+  return mensajePorDefecto;
+}
+
 async function solicitar<T>(endpoint: string, opciones: OpcionesRequest = {}) {
   const {
     method = 'GET',
@@ -32,27 +52,36 @@ async function solicitar<T>(endpoint: string, opciones: OpcionesRequest = {}) {
 
   const esFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    method,
-    headers: {
-      ...(esFormData ? {} : { 'Content-Type': 'application/json' }),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    body: body
-      ? esFormData
-        ? body
-        : JSON.stringify(body)
-      : undefined,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_URL}${endpoint}`, {
+      method,
+      headers: {
+        ...(esFormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      body: body
+        ? esFormData
+          ? body
+          : JSON.stringify(body)
+        : undefined,
+    });
+  } catch {
+    throw new ApiError('No fue posible conectar con el servidor', 0);
+  }
 
   if (!response.ok) {
     const error = await response
       .json()
-      .catch(() => ({ message: 'Error inesperado al consumir la API' }));
+      .catch(async () => {
+        const texto = await response.text().catch(() => '');
+        return texto || null;
+      });
 
     throw new ApiError(
-      error.message ?? 'Error inesperado al consumir la API',
+      extraerMensajeErrorApi(error, 'Error inesperado al consumir la API'),
       response.status,
     );
   }

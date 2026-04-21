@@ -134,6 +134,8 @@ export class SolicitudesService {
       where,
       include: SOLICITUD_INCLUDE,
       orderBy: [{ creadoEn: 'desc' }],
+      ...(typeof filtros.offset === 'number' ? { skip: filtros.offset } : {}),
+      ...(typeof filtros.limite === 'number' ? { take: filtros.limite } : {}),
     });
 
     return solicitudes.map((solicitud) => this.presentarSolicitud(solicitud));

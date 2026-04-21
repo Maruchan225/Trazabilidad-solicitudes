@@ -76,6 +76,8 @@ export class UsuariosService {
         },
       },
       orderBy: [{ apellidos: 'asc' }, { nombres: 'asc' }],
+      ...(typeof filtros.offset === 'number' ? { skip: filtros.offset } : {}),
+      ...(typeof filtros.limite === 'number' ? { take: filtros.limite } : {}),
     });
 
     return usuarios.map((usuario) => this.mapearUsuarioConTotales(usuario));

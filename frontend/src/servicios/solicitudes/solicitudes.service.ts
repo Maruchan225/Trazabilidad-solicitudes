@@ -1,4 +1,9 @@
-import { API_URL, ApiError, apiClient } from '@/servicios/api/client';
+import {
+  API_URL,
+  ApiError,
+  apiClient,
+  extraerMensajeErrorApi,
+} from '@/servicios/api/client';
 import { obtenerTokenGuardado } from '@/servicios/autenticacion/autenticacion.storage';
 import type { EstadoSolicitud, PrioridadSolicitud } from '@/tipos/comun';
 import type {
@@ -69,15 +74,20 @@ async function obtenerArchivoAdjunto(
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
+  }).catch(() => {
+    throw new ApiError('No fue posible conectar con el servidor', 0);
   });
 
   if (!response.ok) {
     const error = await response
       .json()
-      .catch(() => ({ message: 'Error inesperado al obtener el adjunto' }));
+      .catch(async () => {
+        const texto = await response.text().catch(() => '');
+        return texto || null;
+      });
 
     throw new ApiError(
-      error.message ?? 'Error inesperado al obtener el adjunto',
+      extraerMensajeErrorApi(error, 'Error inesperado al obtener el adjunto'),
       response.status,
     );
   }
