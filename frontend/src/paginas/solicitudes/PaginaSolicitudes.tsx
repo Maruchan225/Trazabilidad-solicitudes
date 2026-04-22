@@ -9,6 +9,7 @@ import { TagPrioridad } from '@/componentes/ui/tags/TagPrioridad';
 import { useAutenticacion } from '@/ganchos/useAutenticacion';
 import { useConsulta } from '@/ganchos/useConsulta';
 import { useMutacion } from '@/ganchos/useMutacion';
+import { useValorDebounceado } from '@/ganchos/useValorDebounceado';
 import { areasService } from '@/servicios/areas/areas.service';
 import { solicitudesService } from '@/servicios/solicitudes/solicitudes.service';
 import { tiposSolicitudService } from '@/servicios/tipos-solicitud/tiposSolicitud.service';
@@ -130,8 +131,12 @@ export function PaginaSolicitudes() {
     PrioridadSolicitud | undefined
   >(filtrosIniciales.prioridadFiltro);
   const [busqueda, setBusqueda] = useState(filtrosIniciales.busqueda);
-  const [busquedaAplicada, setBusquedaAplicada] = useState(
-    filtrosIniciales.busqueda.trim(),
+  const {
+    valorDebounceado: busquedaAplicada,
+    sincronizarInmediatamente: sincronizarBusquedaAplicada,
+  } = useValorDebounceado(
+    busqueda.trim(),
+    RETRASO_BUSQUEDA_MS,
   );
   const consulta = useConsulta(
     () =>
@@ -188,25 +193,13 @@ export function PaginaSolicitudes() {
     const filtrosExternos = obtenerFiltrosDesdeQuery(searchParams);
 
     setBusqueda(filtrosExternos.busqueda);
-    setBusquedaAplicada(filtrosExternos.busqueda.trim());
+    sincronizarBusquedaAplicada(filtrosExternos.busqueda.trim());
     setEstadoFiltro(filtrosExternos.estadoFiltro);
     setAreaFiltro(filtrosExternos.areaFiltro);
     setTipoFiltro(filtrosExternos.tipoFiltro);
     setPrioridadFiltro(filtrosExternos.prioridadFiltro);
     ultimaQuerySincronizadaRef.current = queryActual;
-  }, [queryActual, searchParams]);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      const siguienteBusquedaAplicada = busqueda.trim();
-
-      if (siguienteBusquedaAplicada !== busquedaAplicada) {
-        setBusquedaAplicada(siguienteBusquedaAplicada);
-      }
-    }, RETRASO_BUSQUEDA_MS);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [busqueda, busquedaAplicada]);
+  }, [queryActual, searchParams, sincronizarBusquedaAplicada]);
 
   useEffect(() => {
     const parametrosEsperados = construirParametrosFiltros({
@@ -235,11 +228,7 @@ export function PaginaSolicitudes() {
   ]);
 
   function aplicarBusquedaPendiente() {
-    const siguienteBusquedaAplicada = busqueda.trim();
-
-    if (siguienteBusquedaAplicada !== busquedaAplicada) {
-      setBusquedaAplicada(siguienteBusquedaAplicada);
-    }
+    sincronizarBusquedaAplicada(busqueda.trim());
   }
 
   function cerrarModal() {
@@ -349,7 +338,7 @@ export function PaginaSolicitudes() {
           <Button
             onClick={() => {
               setBusqueda('');
-              setBusquedaAplicada('');
+              sincronizarBusquedaAplicada('');
               setEstadoFiltro(undefined);
               setAreaFiltro(undefined);
               setTipoFiltro(undefined);

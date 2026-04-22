@@ -1,12 +1,13 @@
 import { Alert, App, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table } from 'antd';
 import { Link } from 'react-router-dom';
-import { useDeferredValue, useState } from 'react';
+import { useState } from 'react';
 import { FormularioUsuario } from '@/componentes/usuarios/FormularioUsuario';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
 import { TagActivo } from '@/componentes/ui/tags/TagActivo';
 import { useAutenticacion } from '@/ganchos/useAutenticacion';
 import { useConsulta } from '@/ganchos/useConsulta';
 import { useMutacion } from '@/ganchos/useMutacion';
+import { useValorDebounceado } from '@/ganchos/useValorDebounceado';
 import { areasService } from '@/servicios/areas/areas.service';
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
 import type { RolUsuario } from '@/tipos/comun';
@@ -30,17 +31,20 @@ export function PaginaUsuarios() {
   const [areaFiltro, setAreaFiltro] = useState<number>();
   const [activoFiltro, setActivoFiltro] = useState<'activo' | 'inactivo'>();
   const [busqueda, setBusqueda] = useState('');
-  const busquedaDiferida = useDeferredValue(busqueda);
+  const { valorDebounceado: busquedaAplicada } = useValorDebounceado(
+    busqueda.trim(),
+    300,
+  );
   const consulta = useConsulta(
     () =>
       usuariosService.listar({
-        busqueda: busquedaDiferida.trim() || undefined,
+        busqueda: busquedaAplicada || undefined,
         rol: rolFiltro,
         areaId: areaFiltro,
         activo:
           activoFiltro === undefined ? undefined : activoFiltro === 'activo',
       }),
-    [busquedaDiferida, rolFiltro, areaFiltro, activoFiltro],
+    [busquedaAplicada, rolFiltro, areaFiltro, activoFiltro],
   );
   const areas = useConsulta(() => areasService.listar(), []);
   const [form] = Form.useForm<UsuarioPayload>();

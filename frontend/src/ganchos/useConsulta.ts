@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type EstadoConsulta<T> = {
   data: T | null;
@@ -14,22 +14,58 @@ export function useConsulta<T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const consultaRef = useRef(consulta);
+  const montajeActivoRef = useRef(true);
+  const solicitudActualRef = useRef(0);
+
+  useEffect(() => {
+    consultaRef.current = consulta;
+  }, [consulta]);
+
+  useEffect(() => {
+    montajeActivoRef.current = true;
+
+    return () => {
+      montajeActivoRef.current = false;
+    };
+  }, []);
 
   const ejecutar = useCallback(async () => {
+    const solicitudId = ++solicitudActualRef.current;
+
     setLoading(true);
     setError(null);
 
     try {
-      const resultado = await consulta();
+      const resultado = await consultaRef.current();
+      if (
+        !montajeActivoRef.current ||
+        solicitudId !== solicitudActualRef.current
+      ) {
+        return;
+      }
+
       setData(resultado);
     } catch (error) {
+      if (
+        !montajeActivoRef.current ||
+        solicitudId !== solicitudActualRef.current
+      ) {
+        return;
+      }
+
       setError(
         error instanceof Error
           ? error.message
           : 'No fue posible cargar la informacion',
       );
     } finally {
-      setLoading(false);
+      if (
+        montajeActivoRef.current &&
+        solicitudId === solicitudActualRef.current
+      ) {
+        setLoading(false);
+      }
     }
   }, dependencias);
 

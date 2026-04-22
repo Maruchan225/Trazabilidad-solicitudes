@@ -1,5 +1,5 @@
 import { App } from 'antd';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { obtenerMensajeError } from '@/utilidades/crud';
 
 type OpcionesMutacion<TResult> = {
@@ -12,12 +12,26 @@ type OpcionesMutacion<TResult> = {
 export function useMutacion() {
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
+  const montajeActivoRef = useRef(true);
+  const mutacionesActivasRef = useRef(0);
+
+  useEffect(() => {
+    montajeActivoRef.current = true;
+
+    return () => {
+      montajeActivoRef.current = false;
+    };
+  }, []);
 
   async function ejecutar<TResult>(
     accion: () => Promise<TResult>,
     opciones: OpcionesMutacion<TResult> = {},
   ) {
-    setLoading(true);
+    mutacionesActivasRef.current += 1;
+
+    if (montajeActivoRef.current) {
+      setLoading(true);
+    }
 
     try {
       const resultado = await accion();
@@ -42,7 +56,11 @@ export function useMutacion() {
 
       return null;
     } finally {
-      setLoading(false);
+      mutacionesActivasRef.current = Math.max(mutacionesActivasRef.current - 1, 0);
+
+      if (montajeActivoRef.current) {
+        setLoading(mutacionesActivasRef.current > 0);
+      }
     }
   }
 
