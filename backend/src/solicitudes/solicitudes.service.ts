@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -22,10 +21,21 @@ import { CreateSolicitudDto } from './dto/create-solicitud.dto';
 import { DerivarSolicitudDto } from './dto/derivar-solicitud.dto';
 import { FiltroSolicitudesDto } from './dto/filtro-solicitudes.dto';
 import { FinalizarSolicitudDto } from './dto/finalizar-solicitud.dto';
-
-const ACTIVE_REQUEST_WHERE = {
-  eliminadoEn: null,
-} satisfies Prisma.SolicitudWhereInput;
+import {
+  ACTIVE_REQUEST_WHERE,
+  combinarFiltrosSolicitud,
+  construirFiltroConsultaSolicitudes,
+} from './solicitudes-filtros';
+import {
+  obtenerAccionHistorialCambioEstado,
+  validarCambioEstadoPermitido,
+  validarSolicitudCerrable,
+  validarSolicitudEditable,
+  validarSolicitudFinalizable,
+  validarTrabajadorPuedeOperarSolicitud,
+  validarTrabajadorPuedeVerSolicitud,
+} from './solicitudes-flujo';
+import { presentarSolicitud } from './solicitudes-presentacion';
 
 const SOLICITUD_INCLUDE = {
   creadoPor: {
@@ -42,23 +52,7 @@ const SOLICITUD_INCLUDE = {
   tipoSolicitud: true,
 } satisfies Prisma.SolicitudInclude;
 
-type SolicitudBase = Prisma.SolicitudGetPayload<{
-  include: typeof SOLICITUD_INCLUDE;
-}>;
-
-type SolicitudPresentable = {
-  estado: EstadoSolicitud;
-  fechaVencimiento: Date;
-  fechaCierre: Date | null;
-};
-
 type DatosHistorialSolicitud = Prisma.HistorialSolicitudUncheckedCreateInput;
-
-const ESTADOS_REQUIEREN_ASIGNADO = new Set<EstadoSolicitud>([
-  EstadoSolicitud.EN_PROCESO,
-  EstadoSolicitud.PENDIENTE_INFORMACION,
-  EstadoSolicitud.FINALIZADA,
-]);
 
 @Injectable()
 export class SolicitudesService {
@@ -131,10 +125,10 @@ export class SolicitudesService {
   async listar(usuario: UsuarioToken, filtros: FiltroSolicitudesDto) {
     await this.asegurarUsuarioActivoExiste(usuario.id);
 
-    const where = this.combinarFiltrosSolicitud(
+    const where = combinarFiltrosSolicitud(
       ACTIVE_REQUEST_WHERE,
       construirFiltroVisibilidadSolicitudes(usuario),
-      this.construirFiltroConsulta(filtros),
+      construirFiltroConsultaSolicitudes(filtros),
     );
 
     const solicitudes = await this.prisma.solicitud.findMany({
@@ -145,7 +139,7 @@ export class SolicitudesService {
       ...(typeof filtros.limite === 'number' ? { take: filtros.limite } : {}),
     });
 
-    return solicitudes.map((solicitud) => this.presentarSolicitud(solicitud));
+    return solicitudes.map((solicitud) => presentarSolicitud(solicitud));
   }
 
   async verDetalle(id: number, usuario: UsuarioToken) {
@@ -184,7 +178,7 @@ export class SolicitudesService {
       solicitud.historialEntradas,
     );
 
-    return this.presentarSolicitud({
+    return presentarSolicitud({
       ...solicitud,
       historialEntradas: historialEnriquecido,
     });
@@ -202,7 +196,7 @@ export class SolicitudesService {
       solicitud.areaActualId,
     );
 
-    this.validarSolicitudEditable(solicitud);
+    validarSolicitudEditable(solicitud);
 
     if (solicitud.asignadoAId === asignarSolicitudDto.asignadoAId) {
       throw new BadRequestException(
@@ -241,7 +235,7 @@ export class SolicitudesService {
       derivarSolicitudDto.areaDestinoId,
     );
 
-    this.validarSolicitudEditable(solicitud);
+    validarSolicitudEditable(solicitud);
 
     if (solicitud.areaActualId === derivarSolicitudDto.areaDestinoId) {
       throw new BadRequestException(
@@ -280,10 +274,10 @@ export class SolicitudesService {
   ) {
     const solicitud = await this.asegurarSolicitudActivaExiste(id);
     await this.asegurarUsuarioActivoExiste(usuario.id);
-    this.validarTrabajadorPuedeOperarSolicitud(solicitud, usuario);
-    this.validarSolicitudEditable(solicitud);
+    validarTrabajadorPuedeOperarSolicitud(solicitud, usuario);
+    validarSolicitudEditable(solicitud);
 
-    this.validarCambioEstadoPermitido(
+    validarCambioEstadoPermitido(
       solicitud,
       cambiarEstadoSolicitudDto.estado,
       usuario,
@@ -297,7 +291,7 @@ export class SolicitudesService {
       historial: {
         solicitudId: id,
         usuarioId: usuario.id,
-        accion: this.obtenerAccionHistorialCambioEstado(
+        accion: obtenerAccionHistorialCambioEstado(
           cambiarEstadoSolicitudDto.estado,
         ),
         estadoOrigen: solicitud.estado,
@@ -316,7 +310,7 @@ export class SolicitudesService {
   ) {
     const solicitud = await this.asegurarSolicitudActivaExiste(id);
     await this.asegurarUsuarioActivoExiste(usuario.id);
-    this.validarTrabajadorPuedeVerSolicitud(solicitud, usuario);
+    validarTrabajadorPuedeVerSolicitud(solicitud, usuario);
 
     await this.registrarHistorialSolicitud({
       solicitudId: id,
@@ -339,16 +333,8 @@ export class SolicitudesService {
   ) {
     const solicitud = await this.asegurarSolicitudActivaExiste(id);
     await this.asegurarUsuarioActivoExiste(usuario.id);
-    this.validarTrabajadorPuedeOperarSolicitud(solicitud, usuario);
-    this.validarSolicitudEditable(solicitud);
-    this.validarAsignacionRequeridaParaEstado(
-      EstadoSolicitud.FINALIZADA,
-      solicitud.asignadoAId,
-    );
-
-    if (solicitud.estado === EstadoSolicitud.FINALIZADA) {
-      throw new BadRequestException('La solicitud ya se encuentra finalizada');
-    }
+    validarTrabajadorPuedeOperarSolicitud(solicitud, usuario);
+    validarSolicitudFinalizable(solicitud);
 
     await this.actualizarSolicitudConHistorial({
       solicitudId: id,
@@ -375,16 +361,7 @@ export class SolicitudesService {
   ) {
     const solicitud = await this.asegurarSolicitudActivaExiste(id);
     await this.asegurarUsuarioActivoExiste(usuario.id);
-
-    if (solicitud.estado === EstadoSolicitud.CERRADA) {
-      throw new BadRequestException('La solicitud ya se encuentra cerrada');
-    }
-
-    if (solicitud.estado !== EstadoSolicitud.FINALIZADA) {
-      throw new BadRequestException(
-        'Solo se puede cerrar una solicitud que este en estado FINALIZADA',
-      );
-    }
+    validarSolicitudCerrable(solicitud);
 
     await this.actualizarSolicitudConHistorial({
       solicitudId: id,
@@ -510,177 +487,6 @@ export class SolicitudesService {
     return asignadoA;
   }
 
-  private construirFiltroConsulta(
-    filtros: FiltroSolicitudesDto,
-  ): Prisma.SolicitudWhereInput {
-    const busqueda = filtros.busqueda?.trim();
-    const filtraVencidas = filtros.estado === EstadoSolicitud.VENCIDA;
-
-    return {
-      ...(filtros.estado && !filtraVencidas ? { estado: filtros.estado } : {}),
-      ...(filtros.prioridad ? { prioridad: filtros.prioridad } : {}),
-      ...(filtros.areaId ? { areaActualId: filtros.areaId } : {}),
-      ...(filtros.tipoSolicitudId
-        ? { tipoSolicitudId: filtros.tipoSolicitudId }
-        : {}),
-      ...(filtraVencidas
-        ? {
-            fechaCierre: null,
-            fechaVencimiento: {
-              lt: new Date(),
-            },
-          }
-        : {}),
-      ...(busqueda
-        ? {
-            OR: [
-              { titulo: { contains: busqueda, mode: 'insensitive' } },
-              { descripcion: { contains: busqueda, mode: 'insensitive' } },
-              {
-                areaActual: {
-                  nombre: { contains: busqueda, mode: 'insensitive' },
-                },
-              },
-              {
-                tipoSolicitud: {
-                  nombre: { contains: busqueda, mode: 'insensitive' },
-                },
-              },
-              {
-                asignadoA: {
-                  OR: [
-                    { nombres: { contains: busqueda, mode: 'insensitive' } },
-                    { apellidos: { contains: busqueda, mode: 'insensitive' } },
-                  ],
-                },
-              },
-              ...(Number.isInteger(Number(busqueda))
-                ? [{ id: Number(busqueda) }]
-                : []),
-            ],
-          }
-        : {}),
-    };
-  }
-
-  private combinarFiltrosSolicitud(
-    ...filtros: Prisma.SolicitudWhereInput[]
-  ): Prisma.SolicitudWhereInput {
-    const filtrosActivos = filtros.filter((filtro) => Object.keys(filtro).length);
-
-    if (filtrosActivos.length === 0) {
-      return {};
-    }
-
-    if (filtrosActivos.length === 1) {
-      return filtrosActivos[0];
-    }
-
-    return {
-      AND: filtrosActivos,
-    };
-  }
-
-  private validarTrabajadorPuedeVerSolicitud(
-    solicitud: Pick<SolicitudBase, 'asignadoAId' | 'areaActualId'>,
-    usuario: UsuarioToken,
-  ) {
-    if (
-      usuario.rol === RolUsuario.TRABAJADOR &&
-      solicitud.asignadoAId !== usuario.id &&
-      solicitud.areaActualId !== usuario.areaId
-    ) {
-      throw new ForbiddenException(
-        'No tiene permisos para acceder a esta solicitud',
-      );
-    }
-  }
-
-  private validarTrabajadorPuedeOperarSolicitud(
-    solicitud: Pick<SolicitudBase, 'asignadoAId'>,
-    usuario: UsuarioToken,
-  ) {
-    if (
-      usuario.rol === RolUsuario.TRABAJADOR &&
-      solicitud.asignadoAId !== usuario.id
-    ) {
-      throw new ForbiddenException(
-        'Solo el trabajador asignado puede operar esta solicitud',
-      );
-    }
-  }
-
-  private validarSolicitudEditable(solicitud: Pick<SolicitudBase, 'estado'>) {
-    if (solicitud.estado === EstadoSolicitud.CERRADA) {
-      throw new BadRequestException(
-        'La solicitud esta cerrada y ya no admite modificaciones',
-      );
-    }
-  }
-
-  private validarCambioEstadoPermitido(
-    solicitud: Pick<SolicitudBase, 'estado' | 'asignadoAId'>,
-    estadoDestino: EstadoSolicitud,
-    usuario: UsuarioToken,
-  ) {
-    if (
-      this.esTrabajador(usuario) &&
-      solicitud.estado === EstadoSolicitud.FINALIZADA
-    ) {
-      throw new BadRequestException(
-        'La solicitud ya fue finalizada y solo puede ser cerrada por un encargado o reemplazo',
-      );
-    }
-
-    if (estadoDestino === EstadoSolicitud.CERRADA) {
-      throw new BadRequestException(
-        'Use el metodo cerrarSolicitud para estos cambios de estado',
-      );
-    }
-
-    if (
-      this.esTrabajador(usuario) &&
-      estadoDestino === EstadoSolicitud.FINALIZADA
-    ) {
-      throw new BadRequestException(
-        'Use el metodo finalizarSolicitud para marcar la solicitud como FINALIZADA',
-      );
-    }
-
-    if (estadoDestino === EstadoSolicitud.VENCIDA) {
-      throw new BadRequestException(
-        'El estado VENCIDA se determina automaticamente segun la fecha de vencimiento',
-      );
-    }
-
-    if (estadoDestino === EstadoSolicitud.DERIVADA) {
-      throw new BadRequestException(
-        'Use el metodo derivarSolicitudAArea para derivar solicitudes',
-      );
-    }
-
-    if (solicitud.estado === estadoDestino) {
-      throw new BadRequestException('La solicitud ya tiene este estado');
-    }
-
-    this.validarAsignacionRequeridaParaEstado(estadoDestino, solicitud.asignadoAId);
-  }
-
-  private validarAsignacionRequeridaParaEstado(
-    estado: EstadoSolicitud,
-    asignadoAId: number | null,
-  ) {
-    if (ESTADOS_REQUIEREN_ASIGNADO.has(estado) && !asignadoAId) {
-      throw new BadRequestException(
-        'La solicitud debe estar asignada a un trabajador para usar este estado',
-      );
-    }
-  }
-
-  private esTrabajador(usuario: UsuarioToken) {
-    return usuario.rol === 'TRABAJADOR';
-  }
-
   private parsearFechaVencimiento(fecha: string) {
     const fechaVencimiento = new Date(fecha);
 
@@ -689,24 +495,6 @@ export class SolicitudesService {
     }
 
     return fechaVencimiento;
-  }
-
-  private estaSolicitudVencida(solicitud: SolicitudPresentable) {
-    return (
-      !solicitud.fechaCierre &&
-      solicitud.fechaVencimiento.getTime() < Date.now()
-    );
-  }
-
-  private presentarSolicitud<T extends SolicitudPresentable>(solicitud: T) {
-    const estaVencida = this.estaSolicitudVencida(solicitud);
-
-    return {
-      ...solicitud,
-      estadoPersistido: solicitud.estado,
-      estadoActual: estaVencida ? EstadoSolicitud.VENCIDA : solicitud.estado,
-      estaVencida,
-    };
   }
 
   private async enriquecerHistorialAsignaciones<
@@ -761,12 +549,6 @@ export class SolicitudesService {
     data: DatosHistorialSolicitud,
   ) {
     return tx.historialSolicitud.create({ data });
-  }
-
-  private obtenerAccionHistorialCambioEstado(estadoDestino: EstadoSolicitud) {
-    return estadoDestino === EstadoSolicitud.FINALIZADA
-      ? AccionHistorialSolicitud.FINALIZADA
-      : AccionHistorialSolicitud.ESTADO_CAMBIADO;
   }
 
   private async registrarHistorialSolicitud(data: DatosHistorialSolicitud) {
