@@ -1,6 +1,6 @@
 import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table, Tag } from 'antd';
-import { useDeferredValue, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FormularioSolicitud } from '@/componentes/solicitudes/FormularioSolicitud';
 import { Icono } from '@/componentes/ui/Icono';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
@@ -28,25 +28,121 @@ import {
 } from '@/utilidades/opciones';
 import { puedeCrearSolicitudes } from '@/utilidades/permisos';
 
+const RETRASO_BUSQUEDA_MS = 300;
+const ESTADOS_SOLICITUD_VALIDOS: EstadoSolicitud[] = [
+  'INGRESADA',
+  'DERIVADA',
+  'EN_PROCESO',
+  'PENDIENTE_INFORMACION',
+  'FINALIZADA',
+  'CERRADA',
+  'VENCIDA',
+];
+
+const PRIORIDADES_SOLICITUD_VALIDAS: PrioridadSolicitud[] = [
+  'BAJA',
+  'MEDIA',
+  'ALTA',
+  'URGENTE',
+];
+
+function parsearNumeroParam(valor: string | null) {
+  if (!valor) {
+    return undefined;
+  }
+
+  const numero = Number(valor);
+  return Number.isInteger(numero) && numero > 0 ? numero : undefined;
+}
+
+function parsearEstadoParam(valor: string | null) {
+  return ESTADOS_SOLICITUD_VALIDOS.includes(valor as EstadoSolicitud)
+    ? (valor as EstadoSolicitud)
+    : undefined;
+}
+
+function parsearPrioridadParam(valor: string | null) {
+  return PRIORIDADES_SOLICITUD_VALIDAS.includes(valor as PrioridadSolicitud)
+    ? (valor as PrioridadSolicitud)
+    : undefined;
+}
+
+function construirParametrosFiltros(params: {
+  busqueda?: string;
+  estado?: EstadoSolicitud;
+  areaId?: number;
+  tipoSolicitudId?: number;
+  prioridad?: PrioridadSolicitud;
+}) {
+  const searchParams = new URLSearchParams();
+  const busquedaNormalizada = params.busqueda?.trim();
+
+  if (busquedaNormalizada) {
+    searchParams.set('busqueda', busquedaNormalizada);
+  }
+
+  if (params.estado) {
+    searchParams.set('estado', params.estado);
+  }
+
+  if (params.areaId) {
+    searchParams.set('areaId', String(params.areaId));
+  }
+
+  if (params.tipoSolicitudId) {
+    searchParams.set('tipoSolicitudId', String(params.tipoSolicitudId));
+  }
+
+  if (params.prioridad) {
+    searchParams.set('prioridad', params.prioridad);
+  }
+
+  return searchParams;
+}
+
+function obtenerFiltrosDesdeQuery(searchParams: URLSearchParams) {
+  return {
+    busqueda: searchParams.get('busqueda') ?? '',
+    estadoFiltro: parsearEstadoParam(searchParams.get('estado')),
+    areaFiltro: parsearNumeroParam(searchParams.get('areaId')),
+    tipoFiltro: parsearNumeroParam(searchParams.get('tipoSolicitudId')),
+    prioridadFiltro: parsearPrioridadParam(searchParams.get('prioridad')),
+  };
+}
+
 export function PaginaSolicitudes() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filtrosIniciales = obtenerFiltrosDesdeQuery(searchParams);
+  const queryActual = searchParams.toString();
+  const ultimaQuerySincronizadaRef = useRef(queryActual);
   const { sesion } = useAutenticacion();
-  const [estadoFiltro, setEstadoFiltro] = useState<EstadoSolicitud>();
-  const [areaFiltro, setAreaFiltro] = useState<number>();
-  const [tipoFiltro, setTipoFiltro] = useState<number>();
-  const [prioridadFiltro, setPrioridadFiltro] = useState<PrioridadSolicitud>();
-  const [busqueda, setBusqueda] = useState('');
-  const busquedaDiferida = useDeferredValue(busqueda);
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoSolicitud | undefined>(
+    filtrosIniciales.estadoFiltro,
+  );
+  const [areaFiltro, setAreaFiltro] = useState<number | undefined>(
+    filtrosIniciales.areaFiltro,
+  );
+  const [tipoFiltro, setTipoFiltro] = useState<number | undefined>(
+    filtrosIniciales.tipoFiltro,
+  );
+  const [prioridadFiltro, setPrioridadFiltro] = useState<
+    PrioridadSolicitud | undefined
+  >(filtrosIniciales.prioridadFiltro);
+  const [busqueda, setBusqueda] = useState(filtrosIniciales.busqueda);
+  const [busquedaAplicada, setBusquedaAplicada] = useState(
+    filtrosIniciales.busqueda.trim(),
+  );
   const consulta = useConsulta(
     () =>
       solicitudesService.listar({
-        busqueda: busquedaDiferida.trim() || undefined,
+        busqueda: busquedaAplicada || undefined,
         estado: estadoFiltro,
         areaId: areaFiltro,
         tipoSolicitudId: tipoFiltro,
         prioridad: prioridadFiltro,
       }),
-    [busquedaDiferida, estadoFiltro, areaFiltro, tipoFiltro, prioridadFiltro],
+    [busquedaAplicada, estadoFiltro, areaFiltro, tipoFiltro, prioridadFiltro],
   );
   const areas = useConsulta(() => areasService.listar(), []);
   const tiposSolicitud = useConsulta(() => tiposSolicitudService.listar(), []);
@@ -67,7 +163,7 @@ export function PaginaSolicitudes() {
   const filtrosArea = mapearOpcionesAreas(areasActivas);
   const filtrosTipoSolicitud = mapearOpcionesTiposSolicitud(tiposActivos);
   const hayFiltrosAplicados =
-    busqueda.trim().length > 0 ||
+    busquedaAplicada.length > 0 ||
     estadoFiltro !== undefined ||
     areaFiltro !== undefined ||
     tipoFiltro !== undefined ||
@@ -75,6 +171,76 @@ export function PaginaSolicitudes() {
   const mensajeSinResultados = hayFiltrosAplicados
     ? 'No se encontraron solicitudes con los filtros aplicados.'
     : 'No hay solicitudes registradas.';
+  const filtrosActuales = construirParametrosFiltros({
+    busqueda: busquedaAplicada,
+    estado: estadoFiltro,
+    areaId: areaFiltro,
+    tipoSolicitudId: tipoFiltro,
+    prioridad: prioridadFiltro,
+  });
+  const retornoListado = `/solicitudes${filtrosActuales.toString() ? `?${filtrosActuales.toString()}` : ''}`;
+
+  useEffect(() => {
+    if (queryActual === ultimaQuerySincronizadaRef.current) {
+      return;
+    }
+
+    const filtrosExternos = obtenerFiltrosDesdeQuery(searchParams);
+
+    setBusqueda(filtrosExternos.busqueda);
+    setBusquedaAplicada(filtrosExternos.busqueda.trim());
+    setEstadoFiltro(filtrosExternos.estadoFiltro);
+    setAreaFiltro(filtrosExternos.areaFiltro);
+    setTipoFiltro(filtrosExternos.tipoFiltro);
+    setPrioridadFiltro(filtrosExternos.prioridadFiltro);
+    ultimaQuerySincronizadaRef.current = queryActual;
+  }, [queryActual, searchParams]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const siguienteBusquedaAplicada = busqueda.trim();
+
+      if (siguienteBusquedaAplicada !== busquedaAplicada) {
+        setBusquedaAplicada(siguienteBusquedaAplicada);
+      }
+    }, RETRASO_BUSQUEDA_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [busqueda, busquedaAplicada]);
+
+  useEffect(() => {
+    const parametrosEsperados = construirParametrosFiltros({
+      busqueda: busquedaAplicada,
+      estado: estadoFiltro,
+      areaId: areaFiltro,
+      tipoSolicitudId: tipoFiltro,
+      prioridad: prioridadFiltro,
+    }).toString();
+
+    if (queryActual === parametrosEsperados) {
+      ultimaQuerySincronizadaRef.current = queryActual;
+      return;
+    }
+
+    ultimaQuerySincronizadaRef.current = parametrosEsperados;
+    setSearchParams(new URLSearchParams(parametrosEsperados), { replace: true });
+  }, [
+    areaFiltro,
+    busquedaAplicada,
+    estadoFiltro,
+    prioridadFiltro,
+    queryActual,
+    setSearchParams,
+    tipoFiltro,
+  ]);
+
+  function aplicarBusquedaPendiente() {
+    const siguienteBusquedaAplicada = busqueda.trim();
+
+    if (siguienteBusquedaAplicada !== busquedaAplicada) {
+      setBusquedaAplicada(siguienteBusquedaAplicada);
+    }
+  }
 
   function cerrarModal() {
     setModalAbierto(false);
@@ -103,7 +269,9 @@ export function PaginaSolicitudes() {
       onSuccess: async (solicitud) => {
         cerrarModal();
         await consulta.refetch();
-        navigate(`/solicitudes/${solicitud.id}`);
+        navigate(`/solicitudes/${solicitud.id}`, {
+          state: { returnTo: retornoListado },
+        });
       },
     });
   }
@@ -140,7 +308,10 @@ export function PaginaSolicitudes() {
             placeholder="Filtrar estado"
             value={estadoFiltro}
             options={OPCIONES_ESTADO_SOLICITUD}
-            onChange={setEstadoFiltro}
+            onChange={(valor) => {
+              aplicarBusquedaPendiente();
+              setEstadoFiltro(valor);
+            }}
           />
           <Select<number>
             allowClear
@@ -148,7 +319,10 @@ export function PaginaSolicitudes() {
             placeholder="Filtrar area"
             value={areaFiltro}
             options={filtrosArea}
-            onChange={setAreaFiltro}
+            onChange={(valor) => {
+              aplicarBusquedaPendiente();
+              setAreaFiltro(valor);
+            }}
           />
           <Select<number>
             allowClear
@@ -156,7 +330,10 @@ export function PaginaSolicitudes() {
             placeholder="Filtrar tipo"
             value={tipoFiltro}
             options={filtrosTipoSolicitud}
-            onChange={setTipoFiltro}
+            onChange={(valor) => {
+              aplicarBusquedaPendiente();
+              setTipoFiltro(valor);
+            }}
           />
           <Select<PrioridadSolicitud>
             allowClear
@@ -164,11 +341,15 @@ export function PaginaSolicitudes() {
             placeholder="Filtrar prioridad"
             value={prioridadFiltro}
             options={OPCIONES_FILTRO_PRIORIDAD_SOLICITUD}
-            onChange={setPrioridadFiltro}
+            onChange={(valor) => {
+              aplicarBusquedaPendiente();
+              setPrioridadFiltro(valor);
+            }}
           />
           <Button
             onClick={() => {
               setBusqueda('');
+              setBusquedaAplicada('');
               setEstadoFiltro(undefined);
               setAreaFiltro(undefined);
               setTipoFiltro(undefined);
@@ -199,7 +380,12 @@ export function PaginaSolicitudes() {
                 dataIndex: 'titulo',
                 sorter: (a, b) => a.titulo.localeCompare(b.titulo),
                 render: (_, record) => (
-                  <Link to={`/solicitudes/${record.id}`}>{record.titulo}</Link>
+                  <Link
+                    to={`/solicitudes/${record.id}`}
+                    state={{ returnTo: retornoListado }}
+                  >
+                    {record.titulo}
+                  </Link>
                 ),
               },
               {

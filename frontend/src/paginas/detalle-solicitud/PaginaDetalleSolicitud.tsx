@@ -15,7 +15,7 @@ import {
   Upload,
 } from 'antd';
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   AccionSolicitud,
   FormularioAccionSolicitud,
@@ -118,11 +118,20 @@ function describirEntradaHistorial(item: HistorialSolicitud) {
   return item.comentario ? `${actor}: ${item.comentario}` : `${actor} realizo la accion ${item.accion}.`;
 }
 
+type DetalleSolicitudLocationState = {
+  returnTo?: string;
+};
+
 export function PaginaDetalleSolicitud() {
   const { message } = App.useApp();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const solicitudId = Number(id);
   const { sesion } = useAutenticacion();
+  const retornoListado =
+    (location.state as DetalleSolicitudLocationState | null)?.returnTo ??
+    '/solicitudes';
 
   const consulta = useConsulta(
     () => solicitudesService.obtenerPorId(solicitudId),
@@ -319,214 +328,224 @@ export function PaginaDetalleSolicitud() {
       titulo={`Detalle de Solicitud #${id ?? ''}`}
       descripcion=""
     >
-      <EstadoConsulta
-        loading={consulta.loading}
-        error={consulta.error}
-        data={consulta.data}
-        empty={!consulta.data}
-        emptyDescription="No fue posible cargar la solicitud."
-      >
-        <Row gutter={[16, 16]}>
-          <Col xs={24} xl={15}>
-            <Card
-              className="rounded-3xl"
-              title="Informacion principal"
-              extra={
-                <Space wrap>
-                  {puedeGestionar ? (
-                    <>
-                      <Button onClick={() => abrirAccion('asignar')}>Asignar</Button>
-                      <Button onClick={() => abrirAccion('derivar')}>Derivar</Button>
-                      <Button onClick={() => abrirAccion('estado')}>
-                        Cambiar estado
-                      </Button>
-                      <Button onClick={() => abrirAccion('cerrar')}>Cerrar</Button>
-                    </>
-                  ) : null}
-                  {esTrabajador ? (
-                    <>
-                      {trabajadorPuedeCambiarEstado ? (
+      <Space direction="vertical" size={16} className="w-full">
+        <Button
+          icon={<Icono nombre="flecha-izquierda" />}
+          className="w-fit"
+          onClick={() => navigate(retornoListado)}
+        >
+          Volver
+        </Button>
+
+        <EstadoConsulta
+          loading={consulta.loading}
+          error={consulta.error}
+          data={consulta.data}
+          empty={!consulta.data}
+          emptyDescription="No fue posible cargar la solicitud."
+        >
+          <Row gutter={[16, 16]}>
+            <Col xs={24} xl={15}>
+              <Card
+                className="rounded-3xl"
+                title="Informacion principal"
+                extra={
+                  <Space wrap>
+                    {puedeGestionar ? (
+                      <>
+                        <Button onClick={() => abrirAccion('asignar')}>Asignar</Button>
+                        <Button onClick={() => abrirAccion('derivar')}>Derivar</Button>
                         <Button onClick={() => abrirAccion('estado')}>
                           Cambiar estado
                         </Button>
-                      ) : null}
-                      <Button onClick={() => abrirAccion('observacion')}>
-                        Observacion
-                      </Button>
-                      {trabajadorPuedeCambiarEstado ? (
-                        <Button onClick={() => abrirAccion('finalizar')}>
-                          Finalizar
+                        <Button onClick={() => abrirAccion('cerrar')}>Cerrar</Button>
+                      </>
+                    ) : null}
+                    {esTrabajador ? (
+                      <>
+                        {trabajadorPuedeCambiarEstado ? (
+                          <Button onClick={() => abrirAccion('estado')}>
+                            Cambiar estado
+                          </Button>
+                        ) : null}
+                        <Button onClick={() => abrirAccion('observacion')}>
+                          Observacion
                         </Button>
-                      ) : null}
-                    </>
-                  ) : null}
-                </Space>
-              }
-            >
-              <Descriptions column={1} size="middle">
-                <Descriptions.Item label="Titulo">
-                  {consulta.data?.titulo}
-                </Descriptions.Item>
-                <Descriptions.Item label="Estado">
-                  <Space>
-                    <TagEstadoSolicitud
-                      estado={consulta.data?.estadoActual ?? 'INGRESADA'}
-                      estaVencida={consulta.data?.estaVencida}
-                    />
-                    {consulta.data?.estaVencida &&
-                    consulta.data?.estadoActual !== 'VENCIDA' ? (
-                      <Tag color="#111827">Vencida</Tag>
+                        {trabajadorPuedeCambiarEstado ? (
+                          <Button onClick={() => abrirAccion('finalizar')}>
+                            Finalizar
+                          </Button>
+                        ) : null}
+                      </>
                     ) : null}
                   </Space>
-                </Descriptions.Item>
-                <Descriptions.Item label="Fecha de creacion">
-                  {formatearFechaHora(consulta.data?.creadoEn)}
-                </Descriptions.Item>
-                <Descriptions.Item label="Ultima actualizacion">
-                  {formatearFechaHora(consulta.data?.actualizadoEn)}
-                </Descriptions.Item>
-                <Descriptions.Item label="Fecha de vencimiento">
-                  {formatearFecha(consulta.data?.fechaVencimiento)}
-                </Descriptions.Item>
-                <Descriptions.Item label="Fecha de cierre">
-                  {consulta.data?.fechaCierre
-                    ? formatearFechaHora(consulta.data.fechaCierre)
-                    : 'Pendiente'}
-                </Descriptions.Item>
-                <Descriptions.Item label="Area actual">
-                  {consulta.data?.areaActual.nombre}
-                </Descriptions.Item>
-                <Descriptions.Item label="Tipo de solicitud">
-                  {consulta.data?.tipoSolicitud.nombre}
-                </Descriptions.Item>
-                <Descriptions.Item label="Asignado a">
-                  {consulta.data?.asignadoA
-                    ? `${consulta.data.asignadoA.nombres} ${consulta.data.asignadoA.apellidos}`
-                    : 'Sin asignacion'}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
-          </Col>
-          <Col xs={24} xl={9}>
-            <Space direction="vertical" size={16} className="w-full">
-              <Card className="rounded-3xl" title="Descripcion">
-                <Typography.Paragraph className="!mb-0 max-h-[220px] overflow-y-auto pr-1">
-                  {consulta.data?.descripcion}
-                </Typography.Paragraph>
-              </Card>
-              <Card
-                className="rounded-3xl"
-                title="Adjuntos"
-                extra={
-                  <Upload
-                    accept={EXTENSIONES_ADJUNTOS_PERMITIDAS.join(',')}
-                    showUploadList={false}
-                    beforeUpload={validarAdjuntoAntesDeSubir}
-                  >
-                    <Button loading={subiendo}>Subir adjunto</Button>
-                  </Upload>
                 }
               >
-                <Typography.Paragraph className="!mb-4 !text-sm !text-black/65">
-                  Formatos permitidos: PDF, DOC, DOCX, JPG y PNG. Tamano maximo:
-                  10 MB.
-                </Typography.Paragraph>
-                <EstadoConsulta
-                  loading={adjuntos.loading}
-                  error={adjuntos.error}
-                  data={adjuntos.data}
-                  empty={(adjuntos.data?.length ?? 0) === 0}
-                  emptyDescription="No hay adjuntos."
+                <Descriptions column={1} size="middle">
+                  <Descriptions.Item label="Titulo">
+                    {consulta.data?.titulo}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Estado">
+                    <Space>
+                      <TagEstadoSolicitud
+                        estado={consulta.data?.estadoActual ?? 'INGRESADA'}
+                        estaVencida={consulta.data?.estaVencida}
+                      />
+                      {consulta.data?.estaVencida &&
+                      consulta.data?.estadoActual !== 'VENCIDA' ? (
+                        <Tag color="#111827">Vencida</Tag>
+                      ) : null}
+                    </Space>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Fecha de creacion">
+                    {formatearFechaHora(consulta.data?.creadoEn)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Ultima actualizacion">
+                    {formatearFechaHora(consulta.data?.actualizadoEn)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Fecha de vencimiento">
+                    {formatearFecha(consulta.data?.fechaVencimiento)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Fecha de cierre">
+                    {consulta.data?.fechaCierre
+                      ? formatearFechaHora(consulta.data.fechaCierre)
+                      : 'Pendiente'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Area actual">
+                    {consulta.data?.areaActual.nombre}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Tipo de solicitud">
+                    {consulta.data?.tipoSolicitud.nombre}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Asignado a">
+                    {consulta.data?.asignadoA
+                      ? `${consulta.data.asignadoA.nombres} ${consulta.data.asignadoA.apellidos}`
+                      : 'Sin asignacion'}
+                  </Descriptions.Item>
+                </Descriptions>
+              </Card>
+            </Col>
+            <Col xs={24} xl={9}>
+              <Space direction="vertical" size={16} className="w-full">
+                <Card className="rounded-3xl" title="Descripcion">
+                  <Typography.Paragraph className="!mb-0 max-h-[220px] overflow-y-auto pr-1">
+                    {consulta.data?.descripcion}
+                  </Typography.Paragraph>
+                </Card>
+                <Card
+                  className="rounded-3xl"
+                  title="Adjuntos"
+                  extra={
+                    <Upload
+                      accept={EXTENSIONES_ADJUNTOS_PERMITIDAS.join(',')}
+                      showUploadList={false}
+                      beforeUpload={validarAdjuntoAntesDeSubir}
+                    >
+                      <Button loading={subiendo}>Subir adjunto</Button>
+                    </Upload>
+                  }
                 >
-                  <List
-                    dataSource={adjuntos.data ?? []}
-                    renderItem={(adjunto) => (
-                      <List.Item className="!items-start">
-                        <div className="flex w-full flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <List.Item.Meta
-                            className="!m-0 min-w-0 flex-1"
-                            title={
-                              <Typography.Text className="!block !whitespace-normal !break-words !text-black">
-                                {adjunto.nombreOriginal}
-                              </Typography.Text>
-                            }
-                            description={
-                              <Typography.Text className="!text-black/60">
-                                {Math.round(adjunto.tamano / 1024)} KB
-                              </Typography.Text>
-                            }
-                          />
-                          <Space
-                            size={8}
-                            wrap
-                            className="w-full md:w-auto md:justify-end"
-                          >
-                            <Button
-                              size="small"
-                              icon={<Icono nombre="ver" />}
-                              className="!rounded-full !border-municipal-200 !bg-municipal-50 !px-3 !text-municipal-800 hover:!border-municipal-300 hover:!bg-white hover:!text-municipal-900"
-                              onClick={() => void verAdjunto(adjunto.id)}
-                            >
-                              Ver
-                            </Button>
-                            <Button
-                              size="small"
-                              icon={<Icono nombre="descargar" />}
-                              className="!rounded-full !border-municipal-200 !bg-white !px-3 !text-municipal-700 hover:!border-municipal-300 hover:!bg-municipal-50 hover:!text-municipal-900"
-                              onClick={() => void descargarAdjunto(adjunto.id)}
-                            >
-                              Descargar
-                            </Button>
-                            <Popconfirm
-                              title="Eliminar adjunto"
-                              description="Esta accion no se puede deshacer."
-                              okText="Eliminar"
-                              cancelText="Cancelar"
-                              onConfirm={() => void eliminarAdjunto(adjunto.id)}
+                  <Typography.Paragraph className="!mb-4 !text-sm !text-black/65">
+                    Formatos permitidos: PDF, DOC, DOCX, JPG y PNG. Tamano maximo:
+                    10 MB.
+                  </Typography.Paragraph>
+                  <EstadoConsulta
+                    loading={adjuntos.loading}
+                    error={adjuntos.error}
+                    data={adjuntos.data}
+                    empty={(adjuntos.data?.length ?? 0) === 0}
+                    emptyDescription="No hay adjuntos."
+                  >
+                    <List
+                      dataSource={adjuntos.data ?? []}
+                      renderItem={(adjunto) => (
+                        <List.Item className="!items-start">
+                          <div className="flex w-full flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <List.Item.Meta
+                              className="!m-0 min-w-0 flex-1"
+                              title={
+                                <Typography.Text className="!block !whitespace-normal !break-words !text-black">
+                                  {adjunto.nombreOriginal}
+                                </Typography.Text>
+                              }
+                              description={
+                                <Typography.Text className="!text-black/60">
+                                  {Math.round(adjunto.tamano / 1024)} KB
+                                </Typography.Text>
+                              }
+                            />
+                            <Space
+                              size={8}
+                              wrap
+                              className="w-full md:w-auto md:justify-end"
                             >
                               <Button
-                                key="eliminar"
                                 size="small"
-                                danger
-                                className="!rounded-full !px-3"
+                                icon={<Icono nombre="ver" />}
+                                className="!rounded-full !border-municipal-200 !bg-municipal-50 !px-3 !text-municipal-800 hover:!border-municipal-300 hover:!bg-white hover:!text-municipal-900"
+                                onClick={() => void verAdjunto(adjunto.id)}
                               >
-                                Eliminar
+                                Ver
                               </Button>
-                            </Popconfirm>
-                          </Space>
+                              <Button
+                                size="small"
+                                icon={<Icono nombre="descargar" />}
+                                className="!rounded-full !border-municipal-200 !bg-white !px-3 !text-municipal-700 hover:!border-municipal-300 hover:!bg-municipal-50 hover:!text-municipal-900"
+                                onClick={() => void descargarAdjunto(adjunto.id)}
+                              >
+                                Descargar
+                              </Button>
+                              <Popconfirm
+                                title="Eliminar adjunto"
+                                description="Esta accion no se puede deshacer."
+                                okText="Eliminar"
+                                cancelText="Cancelar"
+                                onConfirm={() => void eliminarAdjunto(adjunto.id)}
+                              >
+                                <Button
+                                  key="eliminar"
+                                  size="small"
+                                  danger
+                                  className="!rounded-full !px-3"
+                                >
+                                  Eliminar
+                                </Button>
+                              </Popconfirm>
+                            </Space>
+                          </div>
+                        </List.Item>
+                      )}
+                    />
+                  </EstadoConsulta>
+                </Card>
+                <Card className="rounded-3xl" title="Historial">
+                  <Space
+                    direction="vertical"
+                    className="max-h-[520px] w-full overflow-y-auto pr-1"
+                  >
+                    {historialCompleto.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-2xl border border-municipal-100 p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Typography.Text strong>{item.accion}</Typography.Text>
+                          <Typography.Text className="!text-xs !text-black/55">
+                            {formatearFechaHora(item.creadoEn)}
+                          </Typography.Text>
                         </div>
-                      </List.Item>
-                    )}
-                  />
-                </EstadoConsulta>
-              </Card>
-              <Card className="rounded-3xl" title="Historial">
-                <Space
-                  direction="vertical"
-                  className="max-h-[520px] w-full overflow-y-auto pr-1"
-                >
-                  {historialCompleto.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl border border-municipal-100 p-3"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Typography.Text strong>{item.accion}</Typography.Text>
-                        <Typography.Text className="!text-xs !text-black/55">
-                          {formatearFechaHora(item.creadoEn)}
-                        </Typography.Text>
+                        <Typography.Paragraph className="!mb-0 !mt-2">
+                          {describirEntradaHistorial(item)}
+                        </Typography.Paragraph>
                       </div>
-                      <Typography.Paragraph className="!mb-0 !mt-2">
-                        {describirEntradaHistorial(item)}
-                      </Typography.Paragraph>
-                    </div>
-                  ))}
-                </Space>
-              </Card>
-            </Space>
-          </Col>
-        </Row>
-      </EstadoConsulta>
+                    ))}
+                  </Space>
+                </Card>
+              </Space>
+            </Col>
+          </Row>
+        </EstadoConsulta>
+      </Space>
 
       <Modal
         title={accionActiva ? TITULOS_ACCION_SOLICITUD[accionActiva] : ''}
