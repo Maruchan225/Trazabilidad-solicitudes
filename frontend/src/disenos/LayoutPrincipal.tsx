@@ -88,7 +88,7 @@ export function LayoutPrincipal() {
         breakpoint="lg"
         collapsedWidth="0"
         width={272}
-        className="!bg-municipal-900"
+        className="!bg-marca-900"
       >
         <div className="flex h-full flex-col px-4 py-5">
           <div className="mb-6 rounded-3xl bg-white/10 p-4 text-white">
@@ -109,7 +109,7 @@ export function LayoutPrincipal() {
             onClick={({ key }) => navigate(key)}
           />
 
-          <div className="mt-4 rounded-3xl bg-municipal-700 p-4 text-white shadow-panel">
+          <div className="mt-4 rounded-3xl bg-marca-700 p-4 text-white shadow-panel">
             <Space direction="vertical" size={6}>
               <TagRol rol={sesion?.usuario.rol} />
               <Text className="!text-white">

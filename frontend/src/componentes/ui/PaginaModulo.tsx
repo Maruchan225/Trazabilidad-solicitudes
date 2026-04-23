@@ -49,11 +49,19 @@ export function PaginaModulo({
       </div>
 
       {tarjetas.length > 0 ? (
-        <Row gutter={[16, 16]}>
+        <Row gutter={[12, 12]}>
           {tarjetas.map((tarjeta) => (
-            <Col xs={24} md={12} xl={6} key={tarjeta.titulo}>
-              <Card bordered={false} className="h-full rounded-3xl">
-                <Statistic title={tarjeta.titulo} value={tarjeta.valor} />
+            <Col xs={24} sm={12} lg={8} xl={4} key={tarjeta.titulo}>
+              <Card 
+                bordered={false} 
+                className="h-full rounded-2xl shadow-sm border border-gray-100/50" 
+                styles={{ body: { padding: '16px 20px' } }}
+              >
+                <Statistic 
+                  title={<span className="text-[10px] uppercase tracking-[0.1em] text-gray-400 font-bold">{tarjeta.titulo}</span>} 
+                  value={tarjeta.valor} 
+                  valueStyle={{ fontSize: '22px', fontWeight: '700', color: '#111827', marginTop: '4px' }}
+                />
               </Card>
             </Col>
           ))}

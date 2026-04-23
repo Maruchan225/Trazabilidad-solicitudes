@@ -42,3 +42,22 @@ export function obtenerTopPorCantidad<T>(
     .sort((a, b) => selectorCantidad(b) - selectorCantidad(a))
     .slice(0, limite);
 }
+
+export function formatearEstado(estado: string): string {
+  const mapeo: Record<string, string> = {
+    INGRESADA: 'Ingresada',
+    DERIVADA: 'Derivada',
+    EN_PROCESO: 'En Proceso',
+    PENDIENTE_INFORMACION: 'Pendiente Información',
+    FINALIZADA: 'Finalizada',
+    CERRADA: 'Cerrada',
+    VENCIDA: 'Vencida',
+  };
+
+  return (
+    mapeo[estado] ||
+    estado
+      .charAt(0)
+      .toUpperCase() + estado.slice(1).toLowerCase().replace(/_/g, ' ')
+  );
+}
