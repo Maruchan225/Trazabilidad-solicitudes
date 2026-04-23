@@ -1,6 +1,5 @@
 import { PrioridadSolicitud } from '@prisma/client';
 import {
-  IsDateString,
   IsEnum,
   IsInt,
   IsOptional,
@@ -23,9 +22,6 @@ export class CreateSolicitudDto {
   @IsOptional()
   @IsEnum(PrioridadSolicitud)
   prioridad?: PrioridadSolicitud;
-
-  @IsDateString()
-  fechaVencimiento: string;
 
   @IsOptional()
   @IsInt()

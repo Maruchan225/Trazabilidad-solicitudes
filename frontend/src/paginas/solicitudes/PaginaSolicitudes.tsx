@@ -247,7 +247,6 @@ export function PaginaSolicitudes() {
       ...values,
       titulo: normalizarTextoRequerido(values.titulo),
       descripcion: normalizarTextoRequerido(values.descripcion),
-      fechaVencimiento: new Date(values.fechaVencimiento).toISOString(),
       asignadoAId: values.asignadoAId ?? undefined,
       comentario: normalizarTextoOpcional(comentario),
     };

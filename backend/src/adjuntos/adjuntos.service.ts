@@ -10,6 +10,7 @@ import { access, unlink } from 'fs/promises';
 import type { Express } from 'express';
 import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { handlePrismaError } from '../comun/prisma-error.util';
+import { USUARIO_PUBLICO_CON_AREA_ARGS } from '../comun/usuario-seguro.util';
 import { construirFiltroVisibilidadSolicitudes } from '../comun/visibilidad-solicitudes.util';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -207,13 +208,6 @@ export class AdjuntosService {
   }
 
   private readonly adjuntoInclude = {
-    subidoPor: {
-      omit: {
-        contrasena: true,
-      },
-      include: {
-        area: true,
-      },
-    },
+    subidoPor: USUARIO_PUBLICO_CON_AREA_ARGS,
   } satisfies Prisma.AdjuntoInclude;
 }

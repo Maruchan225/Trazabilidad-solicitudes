@@ -28,6 +28,8 @@ import { UsuariosModule } from './usuarios/usuarios.module';
           .required(),
         JWT_SECRET: Joi.string().min(16).required(),
         JWT_EXPIRES_IN: Joi.string().default('8h'),
+        AUTH_LOGIN_MAX_ATTEMPTS: Joi.number().integer().min(1).default(5),
+        AUTH_LOGIN_WINDOW_MS: Joi.number().integer().min(1000).default(60000),
         FRONTEND_URL: Joi.string().default('http://localhost:5173'),
         ADJUNTOS_DIR: Joi.string().optional(),
       }),

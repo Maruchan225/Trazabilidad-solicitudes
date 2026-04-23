@@ -324,3 +324,38 @@ test('SolicitudesService.listar aplica paginacion opcional sin perder filtros', 
   assert.equal(findManyArgs.skip, 50);
   assert.equal(findManyArgs.where.AND[1].prioridad, PrioridadSolicitud.MEDIA);
 });
+
+test('SolicitudesService.listar utiliza includes seguros para usuarios relacionados', async () => {
+  let findManyArgs;
+
+  const prisma = {
+    usuario: {
+      findUnique: async () => ({
+        id: 1,
+        activo: true,
+      }),
+    },
+    solicitud: {
+      findMany: async (args) => {
+        findManyArgs = args;
+        return [];
+      },
+    },
+  };
+
+  const service = new SolicitudesService(prisma);
+
+  await service.listar(
+    {
+      id: 1,
+      correo: 'encargado@demo.cl',
+      rol: RolUsuario.ENCARGADO,
+      areaId: 1,
+    },
+    {},
+  );
+
+  assert.equal(findManyArgs.include.creadoPor.omit.contrasena, true);
+  assert.equal(findManyArgs.include.asignadoA.omit.contrasena, true);
+  assert.equal(findManyArgs.include.creadoPor.include.area, true);
+});

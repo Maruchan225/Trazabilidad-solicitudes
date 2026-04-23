@@ -7,6 +7,7 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './estrategias/jwt.strategy';
+import { LoginRateLimitGuard } from './guardias/login-rate-limit.guard';
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { JwtStrategy } from './estrategias/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, LoginRateLimitGuard],
   exports: [AuthService],
 })
 export class AuthModule {}
