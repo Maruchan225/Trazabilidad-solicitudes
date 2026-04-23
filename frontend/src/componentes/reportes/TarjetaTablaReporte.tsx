@@ -32,7 +32,10 @@ export function TarjetaTablaReporte<T extends object>({
   const data = consulta.data ?? [];
 
   return (
-    <Card className={className} title={titulo}>
+    <Card
+      className={`${className} flex flex-col [&>.ant-card-body]:flex-1 [&>.ant-card-body]:flex [&>.ant-card-body]:flex-col`}
+      title={titulo}
+    >
       <EstadoConsulta
         loading={consulta.loading}
         error={consulta.error}
@@ -41,6 +44,7 @@ export function TarjetaTablaReporte<T extends object>({
         emptyDescription={emptyDescription}
       >
         <Table<T>
+          className="flex-1"
           rowKey={rowKey}
           dataSource={data}
           columns={columns}

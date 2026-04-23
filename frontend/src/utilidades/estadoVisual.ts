@@ -1,46 +1,46 @@
 import type { EstadoSolicitud, PrioridadSolicitud } from '@/tipos/comun';
 
 export function obtenerColorActivo(activo: boolean) {
-  return activo ? '#4b5563' : 'default';
+  return activo ? '#10b981' : '#94a3b8'; // Verde si activo, gris si no
 }
 
 export function obtenerColorEstadoSolicitud(
   estado: EstadoSolicitud,
   estaVencida?: boolean,
 ) {
+  // ROJO: Riesgo o Urgencia
   if (estaVencida || estado === 'VENCIDA') {
-    return '#111827';
+    return '#ef4444';
   }
 
   switch (estado) {
+    // AMARILLO: En proceso / Pendientes
     case 'INGRESADA':
-      return '#9ca3af';
     case 'DERIVADA':
-      return '#6b7280';
     case 'EN_PROCESO':
-      return '#4b5563';
     case 'PENDIENTE_INFORMACION':
-      return '#d1d5db';
+      return '#f59e0b';
+    
+    // VERDE: Finalizado / Cerrado
     case 'FINALIZADA':
-      return '#6b7280';
     case 'CERRADA':
-      return '#374151';
+      return '#10b981';
+      
     default:
-      return 'default';
+      return '#94a3b8'; // Gris por defecto
   }
 }
 
 export function obtenerColorPrioridad(prioridad: PrioridadSolicitud) {
   switch (prioridad) {
     case 'BAJA':
-      return '#d1d5db';
+      return '#10b981'; // Verde (Bajo riesgo)
     case 'MEDIA':
-      return '#9ca3af';
+      return '#f59e0b'; // Amarillo
     case 'ALTA':
-      return '#6b7280';
     case 'URGENTE':
-      return '#111827';
+      return '#ef4444'; // Rojo (Alto riesgo)
     default:
-      return 'default';
+      return '#94a3b8';
   }
 }

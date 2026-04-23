@@ -1,20 +1,18 @@
-import { Alert, Card, Col, Progress, Row, Space, Table, Typography } from 'antd';
+import { Alert, Card, Col, Row, Space, Typography } from 'antd';
 import { Link } from 'react-router-dom';
-import { TarjetaListaCantidad } from '@/componentes/reportes/TarjetaListaCantidad';
+import { GraficoBarrasEstado } from '@/componentes/reportes/GraficoBarrasEstado';
+import { GraficoBarrasSimple } from '@/componentes/reportes/GraficoBarrasSimple';
+import { GraficoTortaSimple } from '@/componentes/reportes/GraficoTortaSimple';
 import { TarjetaTablaReporte } from '@/componentes/reportes/TarjetaTablaReporte';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
 import { TagCantidad } from '@/componentes/ui/tags/TagCantidad';
 import { useConsulta } from '@/ganchos/useConsulta';
 import { reportesService } from '@/servicios/reportes/reportes.service';
-import type {
-  CargaPorTrabajador,
-  SolicitudVencidaReporte,
-  SolicitudesPorArea,
-  SolicitudesPorTipo,
-} from '@/tipos/reportes';
+import type { CargaPorTrabajador, SolicitudVencidaReporte } from '@/tipos/reportes';
 import {
   crearTarjetasResumenReportes,
   formatearDias,
+  formatearEstado,
   obtenerTopPorCantidad,
 } from '@/utilidades/reportes';
 
@@ -65,7 +63,6 @@ export function PaginaDashboard() {
     6,
   );
   const topVencidas = (vencidas.data ?? []).slice(0, 6);
-  const totalSolicitudes = resumen.data?.totalSolicitudes ?? 0;
 
   if (loading) {
     return (
@@ -74,7 +71,7 @@ export function PaginaDashboard() {
         descripcion="Resumen general del estado de las solicitudes en el sistema."
       >
         <div className="flex min-h-[320px] items-center justify-center">
-          <Typography.Text>Cargando metricas del dashboard...</Typography.Text>
+          <Typography.Text>Cargando métricas del dashboard...</Typography.Text>
         </div>
       </PaginaModulo>
     );
@@ -91,10 +88,15 @@ export function PaginaDashboard() {
     );
   }
 
+  const estadosFormateados = (porEstado.data?.items ?? []).map((item) => ({
+    ...item,
+    estado: formatearEstado(item.estado),
+  }));
+
   return (
     <PaginaModulo
       titulo="Dashboard"
-      descripcion="Panel operativo con metricas reales, carga por trabajador y alertas clave para el seguimiento diario."
+      descripcion="Panel operativo con métricas reales, carga por trabajador y alertas clave para el seguimiento diario."
       tarjetas={[
         ...crearTarjetasResumenReportes(resumen.data, tiempoPromedio.data),
         {
@@ -104,30 +106,35 @@ export function PaginaDashboard() {
       ]}
     >
       <Row gutter={[16, 16]}>
-        <Col xs={24} xl={10}>
+        <Col xs={24} lg={12} xl={8}>
           <Card title="Estado de solicitudes" className="rounded-3xl h-full">
-            <Space direction="vertical" size={14} className="w-full">
-              {(porEstado.data?.items ?? []).map((item) => {
-                const porcentaje =
-                  totalSolicitudes > 0
-                    ? Math.round((item.cantidad / totalSolicitudes) * 100)
-                    : 0;
-
-                return (
-                  <div key={item.estado}>
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <Typography.Text strong>{item.estado}</Typography.Text>
-                      <Typography.Text>{item.cantidad}</Typography.Text>
-                    </div>
-                    <Progress percent={porcentaje} showInfo={false} strokeColor="#4b5563" />
-                  </div>
-                );
-              })}
-            </Space>
+            <GraficoBarrasEstado datos={estadosFormateados} />
           </Card>
         </Col>
 
-        <Col xs={24} xl={14}>
+        <Col xs={24} lg={12} xl={8}>
+          <Card title="Áreas con más solicitudes" className="rounded-3xl h-full">
+            <GraficoBarrasSimple
+              datos={areasTop.map((item) => ({
+                nombre: item.area,
+                cantidad: item.cantidad,
+              }))}
+            />
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={12} xl={8}>
+          <Card title="Tipos más frecuentes" className="rounded-3xl h-full">
+            <GraficoTortaSimple
+              datos={tiposTop.map((item) => ({
+                nombre: item.tipoSolicitud,
+                cantidad: item.cantidad,
+              }))}
+            />
+          </Card>
+        </Col>
+
+        <Col xs={24} xl={12}>
           <TarjetaTablaReporte<CargaPorTrabajador>
             titulo="Carga por trabajador"
             className="rounded-3xl h-full"
@@ -143,7 +150,7 @@ export function PaginaDashboard() {
                 dataIndex: 'nombreCompleto',
               },
               {
-                title: 'Area',
+                title: 'Área',
                 dataIndex: 'area',
               },
               {
@@ -155,22 +162,22 @@ export function PaginaDashboard() {
                 title: 'Vencidas',
                 dataIndex: 'vencidas',
                 render: (valor: number) => (
-                  <TagCantidad valor={valor} color={valor > 0 ? '#111827' : 'default'} />
+                  <TagCantidad valor={valor} color={valor > 0 ? '#ef4444' : '#10b981'} />
                 ),
               },
             ]}
           />
         </Col>
 
-        <Col xs={24} xl={8}>
-          <Card title="Alertas del dia" className="rounded-3xl h-full">
+        <Col xs={24} lg={12} xl={6}>
+          <Card title="Alertas del día" className="rounded-3xl h-full">
             <Space direction="vertical" size={12} className="w-full">
               <div className="rounded-2xl bg-arena p-4">
-                <Typography.Text strong>Solicitudes proximas a vencer</Typography.Text>
+                <Typography.Text strong>Solicitudes próximas a vencer</Typography.Text>
                 <div className="mt-2">
                   <TagCantidad
                     valor={`${resumen.data?.solicitudesProximasAVencer ?? 0} en seguimiento`}
-                    color="#6b7280"
+                    color={resumen.data?.solicitudesProximasAVencer && resumen.data.solicitudesProximasAVencer > 0 ? '#f59e0b' : '#64748b'}
                   />
                 </div>
               </div>
@@ -179,7 +186,7 @@ export function PaginaDashboard() {
                 <div className="mt-2">
                   <TagCantidad
                     valor={`${resumen.data?.solicitudesCerradas ?? 0} resueltas`}
-                    color="#4b5563"
+                    color="#10b981"
                   />
                 </div>
               </div>
@@ -187,8 +194,8 @@ export function PaginaDashboard() {
                 <Typography.Text strong>Tiempo promedio de cierre</Typography.Text>
                 <div className="mt-2">
                   <TagCantidad
-                    valor={`${tiempoPromedio.data?.tiempoPromedioDias ?? 0} dias`}
-                    color="#6b7280"
+                    valor={`${tiempoPromedio.data?.tiempoPromedioDias ?? 0} días`}
+                    color="#6366f1"
                   />
                 </div>
               </div>
@@ -196,33 +203,11 @@ export function PaginaDashboard() {
           </Card>
         </Col>
 
-        <Col xs={24} xl={8}>
-          <TarjetaListaCantidad<SolicitudesPorArea>
-            titulo="Areas con mas solicitudes"
-            items={areasTop}
-            emptyText="No hay datos por area."
-            obtenerClave={(item) => item.areaId}
-            obtenerTitulo={(item) => item.area}
-            obtenerCantidad={(item) => item.cantidad}
-          />
-        </Col>
-
-        <Col xs={24} xl={8}>
-          <TarjetaListaCantidad<SolicitudesPorTipo>
-            titulo="Tipos mas frecuentes"
-            items={tiposTop}
-            emptyText="No hay datos por tipo."
-            obtenerClave={(item) => item.tipoSolicitudId}
-            obtenerTitulo={(item) => item.tipoSolicitud}
-            obtenerCantidad={(item) => item.cantidad}
-          />
-        </Col>
-
-        <Col xs={24} xl={8}>
+        <Col xs={24} lg={12} xl={6}>
           <Card title="Tiempo de respuesta" className="rounded-3xl h-full">
             <Space direction="vertical" size={12} className="w-full">
               <div className="rounded-2xl border border-municipal-100 p-4">
-                <Typography.Text strong>Solicitudes cerradas analizadas</Typography.Text>
+                <Typography.Text strong>Cerradas analizadas</Typography.Text>
                 <Typography.Title level={3} className="!mb-0 !mt-2 !text-black">
                   {tiempoPromedio.data?.totalSolicitudesCerradas ?? 0}
                 </Typography.Title>
@@ -270,7 +255,7 @@ export function PaginaDashboard() {
                 title: 'Atraso',
                 dataIndex: 'diasAtraso',
                 render: (valor: number) => (
-                  <TagCantidad valor={formatearDias(valor)} color="#111827" />
+                  <TagCantidad valor={formatearDias(valor)} color="#ef4444" />
                 ),
               },
             ]}

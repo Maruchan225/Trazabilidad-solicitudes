@@ -15,7 +15,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-image: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 48%, #e5e7eb 100%);
+  background-image: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 48%, #e2e8f0 100%);
 }
 
 #root {
