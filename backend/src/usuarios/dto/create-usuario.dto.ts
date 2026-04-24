@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { RolUsuario } from '@prisma/client';
-import { normalizarRutEntrada } from '../../comun/rut.util';
+import { normalizeRutInput } from '../../comun/rut.util';
 
 export class CreateUsuarioDto {
   @IsString()
@@ -24,7 +24,7 @@ export class CreateUsuarioDto {
   @MaxLength(120)
   apellidos: string;
 
-  @Transform(({ value }) => normalizarRutEntrada(value))
+  @Transform(({ value }) => normalizeRutInput(value))
   @Matches(/^\d{7,8}-[\dK]$/, {
     message: 'El rut debe tener formato 12345678-9',
   })
@@ -46,8 +46,9 @@ export class CreateUsuarioDto {
   @IsEnum(RolUsuario)
   rol: RolUsuario;
 
+  @IsOptional()
   @IsInt()
-  areaId: number;
+  areaId?: number;
 
   @IsOptional()
   @IsBoolean()

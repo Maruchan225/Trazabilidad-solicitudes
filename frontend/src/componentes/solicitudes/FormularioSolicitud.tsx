@@ -1,38 +1,31 @@
 import { Form, Input, Select, Typography } from 'antd';
 import type { FormInstance } from 'antd/es/form';
-import type { Area } from '@/tipos/areas';
-import type { PrioridadSolicitud } from '@/tipos/comun';
+import type { CanalIngreso, PrioridadSolicitud } from '@/tipos/comun';
 import type { SolicitudPayload } from '@/tipos/solicitudes';
 import type { TipoSolicitud } from '@/tipos/tiposSolicitud';
 import type { Usuario } from '@/tipos/usuarios';
 import {
+  OPCIONES_CANAL_INGRESO,
   OPCIONES_PRIORIDAD_SOLICITUD,
-  mapearOpcionesAreas,
   mapearOpcionesTrabajadores,
   mapearOpcionesTiposSolicitud,
 } from '@/utilidades/opciones';
 
 type FormularioSolicitudProps = {
   form: FormInstance<SolicitudPayload>;
-  areas: Area[];
   tiposSolicitud: TipoSolicitud[];
   trabajadoresDisponibles: Usuario[];
-  loadingAreas?: boolean;
   loadingTipos?: boolean;
   loadingUsuarios?: boolean;
-  areaSeleccionada?: number;
   onFinish: (values: SolicitudPayload) => void;
 };
 
 export function FormularioSolicitud({
   form,
-  areas,
   tiposSolicitud,
   trabajadoresDisponibles,
-  loadingAreas = false,
   loadingTipos = false,
   loadingUsuarios = false,
-  areaSeleccionada,
   onFinish,
 }: FormularioSolicitudProps) {
   const tipoSolicitudSeleccionadoId = Form.useWatch('tipoSolicitudId', form);
@@ -49,6 +42,24 @@ export function FormularioSolicitud({
 
   return (
     <Form form={form} layout="vertical" onFinish={onFinish}>
+      <Form.Item label="Canal de ingreso" name="canalIngreso" rules={[{ required: true, message: 'Seleccione el canal de ingreso' }]}>
+        <Select<CanalIngreso> options={OPCIONES_CANAL_INGRESO} />
+      </Form.Item>
+      <Form.Item
+        label="Tipo de solicitud"
+        name="tipoSolicitudId"
+        rules={[{ required: true, message: 'Seleccione el tipo' }]}
+      >
+        <Select
+          loading={loadingTipos}
+          options={mapearOpcionesTiposSolicitud(tiposSolicitud)}
+        />
+      </Form.Item>
+      <Form.Item label="Correlativo">
+        <Typography.Text className="!text-black/75">
+          Se asignara automaticamente como identificador operativo principal al registrar la solicitud en DOM.
+        </Typography.Text>
+      </Form.Item>
       <Form.Item
         label="Titulo"
         name="titulo"
@@ -84,50 +95,27 @@ export function FormularioSolicitud({
       >
         <Select<PrioridadSolicitud> options={OPCIONES_PRIORIDAD_SOLICITUD} />
       </Form.Item>
-      <Form.Item
-        label="Area"
-        name="areaActualId"
-        rules={[{ required: true, message: 'Seleccione el area' }]}
-      >
-        <Select
-          loading={loadingAreas}
-          onChange={() => form.setFieldValue('asignadoAId', undefined)}
-          options={mapearOpcionesAreas(areas)}
-        />
-      </Form.Item>
-      <Form.Item
-        label="Tipo de solicitud"
-        name="tipoSolicitudId"
-        rules={[{ required: true, message: 'Seleccione el tipo' }]}
-      >
-        <Select
-          loading={loadingTipos}
-          options={mapearOpcionesTiposSolicitud(tiposSolicitud)}
-        />
-      </Form.Item>
       <Form.Item label="Fecha de vencimiento calculada">
         <Typography.Text className="!text-black/75">
           {!tipoSolicitudSeleccionado
             ? 'Seleccione un tipo de solicitud para calcular el vencimiento.'
             : fechaVencimientoCalculada
-              ? `Se calculara automaticamente a ${diasSla} dia(s) del momento de creacion: ${fechaVencimientoCalculada}.`
+              ? `Se calculara automaticamente a ${diasSla} dia(s) desde el registro: ${fechaVencimientoCalculada}.`
               : 'El tipo de solicitud seleccionado no tiene dias SLA configurados.'}
         </Typography.Text>
       </Form.Item>
-      <Form.Item label="Asignar a" name="asignadoAId">
+      <Form.Item
+        label="Responsable inicial"
+        name="asignadoAId"
+        rules={[{ required: true, message: 'Seleccione un usuario responsable' }]}
+      >
         <Select
-          allowClear
-          disabled={!areaSeleccionada}
           loading={loadingUsuarios}
-          placeholder={
-            areaSeleccionada
-              ? 'Seleccione un trabajador'
-              : 'Seleccione un area primero'
-          }
+          placeholder="Seleccione un usuario responsable"
           options={mapearOpcionesTrabajadores(trabajadoresDisponibles)}
         />
       </Form.Item>
-      <Form.Item label="Comentario inicial" name="comentario">
+      <Form.Item label="Observacion inicial" name="comentario">
         <Input.TextArea rows={3} />
       </Form.Item>
     </Form>

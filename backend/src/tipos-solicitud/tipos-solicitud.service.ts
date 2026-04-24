@@ -1,6 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { handlePrismaError } from '../comun/prisma-error.util';
 import { CreateTipoSolicitudDto } from './dto/create-tipo-solicitud.dto';
 import { UpdateTipoSolicitudDto } from './dto/update-tipo-solicitud.dto';
 
@@ -8,14 +7,12 @@ import { UpdateTipoSolicitudDto } from './dto/update-tipo-solicitud.dto';
 export class TiposSolicitudService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private readonly mensajeCatalogoSoloLectura =
+    'Los tipos de solicitud se administran como configuracion inicial de DOM';
+
   async crear(createTipoSolicitudDto: CreateTipoSolicitudDto) {
-    try {
-      return await this.prisma.tipoSolicitud.create({
-        data: createTipoSolicitudDto,
-      });
-    } catch (error) {
-      handlePrismaError(error, 'tipo de solicitud');
-    }
+    void createTipoSolicitudDto;
+    throw new ForbiddenException(this.mensajeCatalogoSoloLectura);
   }
 
   listar() {
@@ -41,28 +38,14 @@ export class TiposSolicitudService {
   }
 
   async actualizar(id: number, updateTipoSolicitudDto: UpdateTipoSolicitudDto) {
-    await this.obtenerPorId(id);
-
-    try {
-      return await this.prisma.tipoSolicitud.update({
-        where: { id },
-        data: updateTipoSolicitudDto,
-      });
-    } catch (error) {
-      handlePrismaError(error, 'tipo de solicitud');
-    }
+    void id;
+    void updateTipoSolicitudDto;
+    throw new ForbiddenException(this.mensajeCatalogoSoloLectura);
   }
 
   async eliminar(id: number) {
-    await this.obtenerPorId(id);
-
-    try {
-      return await this.prisma.tipoSolicitud.delete({
-        where: { id },
-      });
-    } catch (error) {
-      handlePrismaError(error, 'tipo de solicitud');
-    }
+    void id;
+    throw new ForbiddenException(this.mensajeCatalogoSoloLectura);
   }
 
   async asegurarExistencia(id: number) {

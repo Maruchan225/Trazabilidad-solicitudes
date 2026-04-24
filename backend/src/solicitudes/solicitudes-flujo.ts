@@ -14,7 +14,6 @@ const ESTADOS_REQUIEREN_ASIGNADO = new Set<EstadoSolicitud>([
 
 type SolicitudVisibleParaTrabajador = {
   asignadoAId: number | null;
-  areaActualId: number;
 };
 
 type SolicitudOperablePorTrabajador = {
@@ -31,32 +30,28 @@ type SolicitudCerrable = {
   estado: EstadoSolicitud;
 };
 
-function esRolTrabajador(usuario: UsuarioToken) {
-  return usuario.rol === RolUsuario.TRABAJADOR;
+function isWorkerRole(user: UsuarioToken) {
+  return user.rol === RolUsuario.TRABAJADOR;
 }
 
-export function validarTrabajadorPuedeVerSolicitud(
-  solicitud: SolicitudVisibleParaTrabajador,
-  usuario: UsuarioToken,
+export function validateWorkerCanViewRequest(
+  request: SolicitudVisibleParaTrabajador,
+  user: UsuarioToken,
 ) {
-  if (
-    usuario.rol === RolUsuario.TRABAJADOR &&
-    solicitud.asignadoAId !== usuario.id &&
-    solicitud.areaActualId !== usuario.areaId
-  ) {
+  if (user.rol === RolUsuario.TRABAJADOR && request.asignadoAId !== user.id) {
     throw new ForbiddenException(
       'No tiene permisos para acceder a esta solicitud',
     );
   }
 }
 
-export function validarTrabajadorPuedeOperarSolicitud(
-  solicitud: SolicitudOperablePorTrabajador,
-  usuario: UsuarioToken,
+export function validateWorkerCanOperateRequest(
+  request: SolicitudOperablePorTrabajador,
+  user: UsuarioToken,
 ) {
   if (
-    usuario.rol === RolUsuario.TRABAJADOR &&
-    solicitud.asignadoAId !== usuario.id
+    user.rol === RolUsuario.TRABAJADOR &&
+    request.asignadoAId !== user.id
   ) {
     throw new ForbiddenException(
       'Solo el trabajador asignado puede operar esta solicitud',
@@ -64,100 +59,100 @@ export function validarTrabajadorPuedeOperarSolicitud(
   }
 }
 
-export function validarSolicitudEditable(solicitud: SolicitudEditable) {
-  if (solicitud.estado === EstadoSolicitud.CERRADA) {
+export function validateRequestEditable(request: SolicitudEditable) {
+  if (request.estado === EstadoSolicitud.CERRADA) {
     throw new BadRequestException(
       'La solicitud esta cerrada y ya no admite modificaciones',
     );
   }
 }
 
-export function validarAsignacionRequeridaParaEstado(
-  estado: EstadoSolicitud,
-  asignadoAId: number | null,
+export function validateAssignmentRequiredForStatus(
+  status: EstadoSolicitud,
+  assignedUserId: number | null,
 ) {
-  if (ESTADOS_REQUIEREN_ASIGNADO.has(estado) && !asignadoAId) {
+  if (ESTADOS_REQUIEREN_ASIGNADO.has(status) && !assignedUserId) {
     throw new BadRequestException(
       'La solicitud debe estar asignada a un trabajador para usar este estado',
     );
   }
 }
 
-export function validarCambioEstadoPermitido(
-  solicitud: SolicitudCambioEstado,
-  estadoDestino: EstadoSolicitud,
-  usuario: UsuarioToken,
+export function validateStatusChangeAllowed(
+  request: SolicitudCambioEstado,
+  destinationStatus: EstadoSolicitud,
+  user: UsuarioToken,
 ) {
   if (
-    esRolTrabajador(usuario) &&
-    solicitud.estado === EstadoSolicitud.FINALIZADA
+    isWorkerRole(user) &&
+    request.estado === EstadoSolicitud.FINALIZADA
   ) {
     throw new BadRequestException(
       'La solicitud ya fue finalizada y solo puede ser cerrada por un encargado o reemplazo',
     );
   }
 
-  if (estadoDestino === EstadoSolicitud.CERRADA) {
+  if (destinationStatus === EstadoSolicitud.CERRADA) {
     throw new BadRequestException(
       'Use el metodo cerrarSolicitud para estos cambios de estado',
     );
   }
 
-  if (esRolTrabajador(usuario) && estadoDestino === EstadoSolicitud.FINALIZADA) {
+  if (isWorkerRole(user) && destinationStatus === EstadoSolicitud.FINALIZADA) {
     throw new BadRequestException(
       'Use el metodo finalizarSolicitud para marcar la solicitud como FINALIZADA',
     );
   }
 
-  if (estadoDestino === EstadoSolicitud.VENCIDA) {
+  if (destinationStatus === EstadoSolicitud.VENCIDA) {
     throw new BadRequestException(
       'El estado VENCIDA se determina automaticamente segun la fecha de vencimiento',
     );
   }
 
-  if (estadoDestino === EstadoSolicitud.DERIVADA) {
+  if (destinationStatus === EstadoSolicitud.DERIVADA) {
     throw new BadRequestException(
-      'Use el metodo derivarSolicitudAArea para derivar solicitudes',
+      'Use el metodo derivarSolicitud para derivar solicitudes',
     );
   }
 
-  if (solicitud.estado === estadoDestino) {
+  if (request.estado === destinationStatus) {
     throw new BadRequestException('La solicitud ya tiene este estado');
   }
 
-  validarAsignacionRequeridaParaEstado(estadoDestino, solicitud.asignadoAId);
+  validateAssignmentRequiredForStatus(destinationStatus, request.asignadoAId);
 }
 
-export function validarSolicitudFinalizable(
-  solicitud: SolicitudCambioEstado,
+export function validateRequestFinalizable(
+  request: SolicitudCambioEstado,
 ) {
-  validarSolicitudEditable(solicitud);
-  validarAsignacionRequeridaParaEstado(
+  validateRequestEditable(request);
+  validateAssignmentRequiredForStatus(
     EstadoSolicitud.FINALIZADA,
-    solicitud.asignadoAId,
+    request.asignadoAId,
   );
 
-  if (solicitud.estado === EstadoSolicitud.FINALIZADA) {
+  if (request.estado === EstadoSolicitud.FINALIZADA) {
     throw new BadRequestException('La solicitud ya se encuentra finalizada');
   }
 }
 
-export function validarSolicitudCerrable(solicitud: SolicitudCerrable) {
-  if (solicitud.estado === EstadoSolicitud.CERRADA) {
+export function validateRequestClosable(request: SolicitudCerrable) {
+  if (request.estado === EstadoSolicitud.CERRADA) {
     throw new BadRequestException('La solicitud ya se encuentra cerrada');
   }
 
-  if (solicitud.estado !== EstadoSolicitud.FINALIZADA) {
+  if (request.estado !== EstadoSolicitud.FINALIZADA) {
     throw new BadRequestException(
       'Solo se puede cerrar una solicitud que este en estado FINALIZADA',
     );
   }
 }
 
-export function obtenerAccionHistorialCambioEstado(
-  estadoDestino: EstadoSolicitud,
+export function getHistoryActionForStatusChange(
+  destinationStatus: EstadoSolicitud,
 ) {
-  return estadoDestino === EstadoSolicitud.FINALIZADA
+  return destinationStatus === EstadoSolicitud.FINALIZADA
     ? AccionHistorialSolicitud.FINALIZADA
     : AccionHistorialSolicitud.ESTADO_CAMBIADO;
 }

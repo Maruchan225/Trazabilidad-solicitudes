@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { EstadoSolicitud, Prisma } from '@prisma/client';
-import { USUARIO_PUBLICO_CON_AREA_ARGS } from '../comun/usuario-seguro.util';
+import { EstadoSolicitud, Prisma, PrioridadSolicitud } from '@prisma/client';
+import type { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
+import { SAFE_USER_WITH_AREA_ARGS } from '../comun/usuario-seguro.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { FiltroReportesDto } from './dto/filtro-reportes.dto';
 
@@ -9,8 +10,8 @@ export class ReportesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async obtenerResumenGeneral(filtros: FiltroReportesDto) {
-    const where = this.construirFiltroReporte(filtros);
-    const [totalSolicitudes, solicitudesPorEstado, proximasAVencer] =
+    const where = this.buildReportFilter(filtros);
+    const [totalRequests, requestsByStatus, dueSoonCount] =
       await Promise.all([
         this.prisma.solicitud.count({ where }),
         this.prisma.solicitud.groupBy({
@@ -20,29 +21,29 @@ export class ReportesService {
             _all: true,
           },
         }),
-        this.prisma.solicitud.count({ where: this.construirFiltroProximasAVencer(where) }),
+        this.prisma.solicitud.count({ where: this.buildDueSoonFilter(where) }),
       ]);
 
-    const mapaEstados = new Map(
-      solicitudesPorEstado.map((item) => [item.estado, item._count._all]),
+    const statusMap = new Map(
+      requestsByStatus.map((item) => [item.estado, item._count._all]),
     );
 
-    const solicitudesVencidas = await this.contarSolicitudesVencidas(where);
+    const overdueRequests = await this.countOverdueRequests(where);
 
     return {
-      totalSolicitudes,
-      solicitudesIngresadas: mapaEstados.get(EstadoSolicitud.INGRESADA) ?? 0,
-      solicitudesEnProceso: mapaEstados.get(EstadoSolicitud.EN_PROCESO) ?? 0,
-      solicitudesFinalizadas: mapaEstados.get(EstadoSolicitud.FINALIZADA) ?? 0,
-      solicitudesCerradas: mapaEstados.get(EstadoSolicitud.CERRADA) ?? 0,
-      solicitudesVencidas,
-      solicitudesProximasAVencer: proximasAVencer,
+      totalSolicitudes: totalRequests,
+      solicitudesIngresadas: statusMap.get(EstadoSolicitud.INGRESADA) ?? 0,
+      solicitudesEnProceso: statusMap.get(EstadoSolicitud.EN_PROCESO) ?? 0,
+      solicitudesFinalizadas: statusMap.get(EstadoSolicitud.FINALIZADA) ?? 0,
+      solicitudesCerradas: statusMap.get(EstadoSolicitud.CERRADA) ?? 0,
+      solicitudesVencidas: overdueRequests,
+      solicitudesProximasAVencer: dueSoonCount,
     };
   }
 
   async obtenerSolicitudesPorEstado(filtros: FiltroReportesDto) {
-    const where = this.construirFiltroReporte(filtros);
-    const [agrupadas, solicitudesVencidas] = await Promise.all([
+    const where = this.buildReportFilter(filtros);
+    const [groupedItems, overdueRequests] = await Promise.all([
       this.prisma.solicitud.groupBy({
         by: ['estado'],
         where,
@@ -50,67 +51,33 @@ export class ReportesService {
           _all: true,
         },
       }),
-      this.contarSolicitudesVencidas(where),
+      this.countOverdueRequests(where),
     ]);
 
-    const resultado = agrupadas.map((item) => ({
+    const items = groupedItems.map((item) => ({
       estado: item.estado,
       cantidad: item._count._all,
     }));
 
     return {
-      items: resultado,
-      totalVencidasCalculadas: solicitudesVencidas,
+      items,
+      totalVencidasCalculadas: overdueRequests,
     };
   }
 
-  async obtenerSolicitudesPorArea(filtros: FiltroReportesDto) {
-    const where = this.construirFiltroReporte(filtros);
-
-    const items = await this.prisma.area.findMany({
-      where: filtros.areaId ? { id: filtros.areaId } : undefined,
-      orderBy: {
-        nombre: 'asc',
-      },
-      select: {
-        id: true,
-        nombre: true,
-        solicitudesActuales: {
-          where,
-          select: {
-            id: true,
-          },
-        },
-      },
-    });
-
-    return items.map((area) => ({
-      areaId: area.id,
-      area: area.nombre,
-      cantidad: area.solicitudesActuales.length,
-    }));
-  }
-
   async obtenerCargaPorTrabajador(filtros: FiltroReportesDto) {
-    const where = this.construirFiltroReporte(filtros);
+    const where = this.buildReportFilter(filtros);
 
-    const trabajadores = await this.prisma.usuario.findMany({
+    const workers = await this.prisma.usuario.findMany({
       where: {
         rol: 'TRABAJADOR',
         ...(filtros.trabajadorId ? { id: filtros.trabajadorId } : {}),
-        ...(filtros.areaId ? { areaId: filtros.areaId } : {}),
       },
       orderBy: [{ apellidos: 'asc' }, { nombres: 'asc' }],
       select: {
         id: true,
         nombres: true,
         apellidos: true,
-        area: {
-          select: {
-            id: true,
-            nombre: true,
-          },
-        },
         solicitudesAsignadas: {
           where,
           select: {
@@ -123,34 +90,32 @@ export class ReportesService {
       },
     });
 
-    return trabajadores.map((trabajador) => ({
-      trabajadorId: trabajador.id,
-      nombreCompleto: `${trabajador.nombres} ${trabajador.apellidos}`,
-      areaId: trabajador.area.id,
-      area: trabajador.area.nombre,
-      totalAsignadas: trabajador.solicitudesAsignadas.length,
-      enProceso: trabajador.solicitudesAsignadas.filter(
-        (solicitud) => solicitud.estado === EstadoSolicitud.EN_PROCESO,
+    return workers.map((worker) => ({
+      trabajadorId: worker.id,
+      nombreCompleto: `${worker.nombres} ${worker.apellidos}`,
+      totalAsignadas: worker.solicitudesAsignadas.length,
+      enProceso: worker.solicitudesAsignadas.filter(
+        (request) => request.estado === EstadoSolicitud.EN_PROCESO,
       ).length,
-      pendientesInformacion: trabajador.solicitudesAsignadas.filter(
-        (solicitud) =>
-          solicitud.estado === EstadoSolicitud.PENDIENTE_INFORMACION,
+      pendientesInformacion: worker.solicitudesAsignadas.filter(
+        (request) =>
+          request.estado === EstadoSolicitud.PENDIENTE_INFORMACION,
       ).length,
-      finalizadas: trabajador.solicitudesAsignadas.filter(
-        (solicitud) => solicitud.estado === EstadoSolicitud.FINALIZADA,
+      finalizadas: worker.solicitudesAsignadas.filter(
+        (request) => request.estado === EstadoSolicitud.FINALIZADA,
       ).length,
-      cerradas: trabajador.solicitudesAsignadas.filter(
-        (solicitud) => solicitud.estado === EstadoSolicitud.CERRADA,
+      cerradas: worker.solicitudesAsignadas.filter(
+        (request) => request.estado === EstadoSolicitud.CERRADA,
       ).length,
-      vencidas: trabajador.solicitudesAsignadas.filter((solicitud) =>
-        this.esSolicitudVencida(solicitud),
+      vencidas: worker.solicitudesAsignadas.filter((request) =>
+        this.isRequestOverdue(request),
       ).length,
     }));
   }
 
   async obtenerTiempoPromedioRespuesta(filtros: FiltroReportesDto) {
-    const where = this.construirFiltroReporte(filtros);
-    const solicitudesCerradas = await this.prisma.solicitud.findMany({
+    const where = this.buildReportFilter(filtros);
+    const closedRequests = await this.prisma.solicitud.findMany({
       where: {
         ...where,
         fechaCierre: {
@@ -161,12 +126,6 @@ export class ReportesService {
         id: true,
         creadoEn: true,
         fechaCierre: true,
-        areaActual: {
-          select: {
-            id: true,
-            nombre: true,
-          },
-        },
         tipoSolicitud: {
           select: {
             id: true,
@@ -176,36 +135,35 @@ export class ReportesService {
       },
     });
 
-    const tiemposEnHoras = solicitudesCerradas.map((solicitud) =>
-      this.calcularHorasEntreFechas(
-        solicitud.creadoEn,
-        solicitud.fechaCierre as Date,
+    const durationsInHours = closedRequests.map((request) =>
+      this.calculateHoursBetweenDates(
+        request.creadoEn,
+        request.fechaCierre as Date,
       ),
     );
 
-    const promedioHoras =
-      tiemposEnHoras.length > 0
-        ? this.redondear(
-            tiemposEnHoras.reduce((acc, valor) => acc + valor, 0) /
-              tiemposEnHoras.length,
+    const averageHours =
+      durationsInHours.length > 0
+        ? this.round(
+            durationsInHours.reduce((acc, value) => acc + value, 0) /
+              durationsInHours.length,
           )
         : 0;
 
     return {
-      totalSolicitudesCerradas: solicitudesCerradas.length,
-      tiempoPromedioHoras: promedioHoras,
-      tiempoPromedioDias: this.redondear(promedioHoras / 24),
+      totalSolicitudesCerradas: closedRequests.length,
+      tiempoPromedioHoras: averageHours,
+      tiempoPromedioDias: this.round(averageHours / 24),
     };
   }
 
   async obtenerSolicitudesVencidas(filtros: FiltroReportesDto) {
-    const where = this.construirFiltroReporte(filtros);
+    const where = this.buildReportFilter(filtros);
 
-    const solicitudes = await this.prisma.solicitud.findMany({
-      where: this.construirFiltroSolicitudesVencidas(where),
+    const requests = await this.prisma.solicitud.findMany({
+      where: this.buildOverdueRequestsFilter(where),
       include: {
-        areaActual: true,
-        asignadoA: USUARIO_PUBLICO_CON_AREA_ARGS,
+        asignadoA: SAFE_USER_WITH_AREA_ARGS,
         tipoSolicitud: true,
       },
       orderBy: {
@@ -213,25 +171,25 @@ export class ReportesService {
       },
     });
 
-    return solicitudes.map((solicitud) => ({
-      id: solicitud.id,
-      titulo: solicitud.titulo,
-      estado: solicitud.estado,
-      fechaVencimiento: solicitud.fechaVencimiento,
-      diasAtraso: this.calcularDiasAtraso(solicitud.fechaVencimiento),
-      areaId: solicitud.areaActual.id,
-      area: solicitud.areaActual.nombre,
-      tipoSolicitudId: solicitud.tipoSolicitud.id,
-      tipoSolicitud: solicitud.tipoSolicitud.nombre,
-      asignadoAId: solicitud.asignadoA?.id ?? null,
-      asignadoA: solicitud.asignadoA
-        ? `${solicitud.asignadoA.nombres} ${solicitud.asignadoA.apellidos}`
+    return requests.map((request) => ({
+      id: request.id,
+      correlativo: request.correlativo,
+      numeroSolicitud: request.numeroSolicitud,
+      titulo: request.titulo,
+      estado: request.estado,
+      fechaVencimiento: request.fechaVencimiento,
+      diasAtraso: this.calculateDelayDays(request.fechaVencimiento),
+      tipoSolicitudId: request.tipoSolicitud.id,
+      tipoSolicitud: request.tipoSolicitud.nombre,
+      asignadoAId: request.asignadoA?.id ?? null,
+      asignadoA: request.asignadoA
+        ? `${request.asignadoA.nombres} ${request.asignadoA.apellidos}`
         : null,
     }));
   }
 
   async obtenerSolicitudesPorTipo(filtros: FiltroReportesDto) {
-    const where = this.construirFiltroReporte(filtros);
+    const where = this.buildReportFilter(filtros);
 
     const items = await this.prisma.tipoSolicitud.findMany({
       where: filtros.tipoSolicitudId
@@ -252,17 +210,100 @@ export class ReportesService {
       },
     });
 
-    return items.map((tipoSolicitud) => ({
-      tipoSolicitudId: tipoSolicitud.id,
-      tipoSolicitud: tipoSolicitud.nombre,
-      cantidad: tipoSolicitud.solicitudes.length,
+    return items.map((requestType) => ({
+      tipoSolicitudId: requestType.id,
+      tipoSolicitud: requestType.nombre,
+      cantidad: requestType.solicitudes.length,
     }));
   }
 
-  private construirFiltroReporte(
+  async obtenerSolicitudesPorPrioridad(filtros: FiltroReportesDto) {
+    const where = this.buildReportFilter(filtros);
+
+    const agrupadas = await this.prisma.solicitud.groupBy({
+      by: ['prioridad'],
+      where,
+      _count: {
+        _all: true,
+      },
+    });
+
+    const priorities = [
+      PrioridadSolicitud.BAJA,
+      PrioridadSolicitud.MEDIA,
+      PrioridadSolicitud.ALTA,
+      PrioridadSolicitud.URGENTE,
+    ];
+
+    return priorities.map((priority) => ({
+      prioridad: priority,
+      cantidad:
+        agrupadas.find((item) => item.prioridad === priority)?._count._all ?? 0,
+    }));
+  }
+
+  async obtenerDashboardTrabajador(usuario: UsuarioToken) {
+    const baseWhere: Prisma.SolicitudWhereInput = {
+      eliminadoEn: null,
+      asignadoAId: usuario.id,
+    };
+
+    const [
+      solicitudesNuevas,
+      solicitudesEnProceso,
+      solicitudesCerradas,
+      solicitudesPorVencer,
+      solicitudesVencidas,
+      solicitudesACargo,
+    ] = await Promise.all([
+      this.prisma.solicitud.count({
+        where: {
+          ...baseWhere,
+          estado: {
+            in: [EstadoSolicitud.INGRESADA, EstadoSolicitud.DERIVADA],
+          },
+        },
+      }),
+      this.prisma.solicitud.count({
+        where: {
+          ...baseWhere,
+          estado: EstadoSolicitud.EN_PROCESO,
+        },
+      }),
+      this.prisma.solicitud.count({
+        where: {
+          ...baseWhere,
+          estado: EstadoSolicitud.CERRADA,
+        },
+      }),
+      this.prisma.solicitud.count({
+        where: this.buildDueSoonFilter(baseWhere),
+      }),
+      this.prisma.solicitud.count({
+        where: this.buildOverdueRequestsFilter(baseWhere),
+      }),
+      this.prisma.solicitud.count({
+        where: {
+          ...baseWhere,
+          fechaCierre: null,
+        },
+      }),
+    ]);
+
+    return {
+      solicitudesNuevas,
+      solicitudesEnProceso,
+      solicitudesCerradas,
+      solicitudesPorVencer,
+      solicitudesVencidas,
+      solicitudesACargo,
+    };
+  }
+
+  private buildReportFilter(
     filtros: FiltroReportesDto,
   ): Prisma.SolicitudWhereInput {
-    const { fechaDesde, fechaHasta } = this.obtenerRangoFechasValido(filtros);
+    const { fechaDesde, fechaHasta } = this.getValidDateRange(filtros);
 
     if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
       throw new BadRequestException(
@@ -270,20 +311,19 @@ export class ReportesService {
       );
     }
 
-    const filtroFecha =
+    const dateFilter =
       fechaDesde || fechaHasta
         ? {
             creadoEn: {
-              ...(fechaDesde ? { gte: this.inicioDelDia(fechaDesde) } : {}),
-              ...(fechaHasta ? { lte: this.finDelDia(fechaHasta) } : {}),
+              ...(fechaDesde ? { gte: this.startOfDay(fechaDesde) } : {}),
+              ...(fechaHasta ? { lte: this.endOfDay(fechaHasta) } : {}),
             },
           }
         : {};
 
     return {
       eliminadoEn: null,
-      ...filtroFecha,
-      ...(filtros.areaId ? { areaActualId: filtros.areaId } : {}),
+      ...dateFilter,
       ...(filtros.trabajadorId ? { asignadoAId: filtros.trabajadorId } : {}),
       ...(filtros.tipoSolicitudId
         ? { tipoSolicitudId: filtros.tipoSolicitudId }
@@ -291,18 +331,18 @@ export class ReportesService {
     };
   }
 
-  private async contarSolicitudesVencidas(where: Prisma.SolicitudWhereInput) {
+  private async countOverdueRequests(where: Prisma.SolicitudWhereInput) {
     return this.prisma.solicitud.count({
-      where: this.construirFiltroSolicitudesVencidas(where),
+      where: this.buildOverdueRequestsFilter(where),
     });
   }
 
-  private obtenerRangoFechasValido(filtros: FiltroReportesDto) {
-    const fechaDesde = this.parsearFechaOpcional(
+  private getValidDateRange(filtros: FiltroReportesDto) {
+    const fechaDesde = this.parseOptionalDate(
       filtros.fechaDesde,
       'fechaDesde no es una fecha valida',
     );
-    const fechaHasta = this.parsearFechaOpcional(
+    const fechaHasta = this.parseOptionalDate(
       filtros.fechaHasta,
       'fechaHasta no es una fecha valida',
     );
@@ -310,21 +350,21 @@ export class ReportesService {
     return { fechaDesde, fechaHasta };
   }
 
-  private parsearFechaOpcional(valor: string | undefined, mensajeError: string) {
-    if (!valor) {
+  private parseOptionalDate(value: string | undefined, errorMessage: string) {
+    if (!value) {
       return undefined;
     }
 
-    const fecha = new Date(valor);
+    const parsedDate = new Date(value);
 
-    if (Number.isNaN(fecha.getTime())) {
-      throw new BadRequestException(mensajeError);
+    if (Number.isNaN(parsedDate.getTime())) {
+      throw new BadRequestException(errorMessage);
     }
 
-    return fecha;
+    return parsedDate;
   }
 
-  private construirFiltroSolicitudesVencidas(where: Prisma.SolicitudWhereInput) {
+  private buildOverdueRequestsFilter(where: Prisma.SolicitudWhereInput) {
     return {
       ...where,
       fechaCierre: null,
@@ -334,52 +374,52 @@ export class ReportesService {
     };
   }
 
-  private construirFiltroProximasAVencer(where: Prisma.SolicitudWhereInput) {
+  private buildDueSoonFilter(where: Prisma.SolicitudWhereInput) {
     return {
       ...where,
       fechaCierre: null,
       fechaVencimiento: {
         gte: new Date(),
-        lte: this.sumarDias(new Date(), 3),
+        lte: this.addDays(new Date(), 3),
       },
     };
   }
 
-  private esSolicitudVencida(solicitud: {
+  private isRequestOverdue(request: {
     fechaCierre: Date | null;
     fechaVencimiento: Date;
   }) {
-    return !solicitud.fechaCierre && solicitud.fechaVencimiento < new Date();
+    return !request.fechaCierre && request.fechaVencimiento < new Date();
   }
 
-  private calcularHorasEntreFechas(inicio: Date, fin: Date) {
-    return (fin.getTime() - inicio.getTime()) / (1000 * 60 * 60);
+  private calculateHoursBetweenDates(start: Date, end: Date) {
+    return (end.getTime() - start.getTime()) / (1000 * 60 * 60);
   }
 
-  private calcularDiasAtraso(fechaVencimiento: Date) {
-    const diferencia = Date.now() - fechaVencimiento.getTime();
-    return Math.max(1, Math.ceil(diferencia / (1000 * 60 * 60 * 24)));
+  private calculateDelayDays(dueDate: Date) {
+    const difference = Date.now() - dueDate.getTime();
+    return Math.max(1, Math.ceil(difference / (1000 * 60 * 60 * 24)));
   }
 
-  private sumarDias(fecha: Date, dias: number) {
-    const nuevaFecha = new Date(fecha);
-    nuevaFecha.setDate(nuevaFecha.getDate() + dias);
-    return nuevaFecha;
+  private addDays(date: Date, days: number) {
+    const nextDate = new Date(date);
+    nextDate.setDate(nextDate.getDate() + days);
+    return nextDate;
   }
 
-  private inicioDelDia(fecha: Date) {
-    const nuevaFecha = new Date(fecha);
-    nuevaFecha.setHours(0, 0, 0, 0);
-    return nuevaFecha;
+  private startOfDay(date: Date) {
+    const nextDate = new Date(date);
+    nextDate.setHours(0, 0, 0, 0);
+    return nextDate;
   }
 
-  private finDelDia(fecha: Date) {
-    const nuevaFecha = new Date(fecha);
-    nuevaFecha.setHours(23, 59, 59, 999);
-    return nuevaFecha;
+  private endOfDay(date: Date) {
+    const nextDate = new Date(date);
+    nextDate.setHours(23, 59, 59, 999);
+    return nextDate;
   }
 
-  private redondear(valor: number) {
-    return Number(valor.toFixed(2));
+  private round(value: number) {
+    return Number(value.toFixed(2));
   }
 }

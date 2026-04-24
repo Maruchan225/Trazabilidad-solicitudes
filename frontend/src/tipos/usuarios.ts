@@ -24,6 +24,6 @@ export type UsuarioPayload = {
   contrasena?: string;
   telefono?: string;
   rol: RolUsuario;
-  areaId: number;
+  areaId?: number;
   activo?: boolean;
 };

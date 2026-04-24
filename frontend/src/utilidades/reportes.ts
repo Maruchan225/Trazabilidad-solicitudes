@@ -48,7 +48,7 @@ export function formatearEstado(estado: string): string {
     INGRESADA: 'Ingresada',
     DERIVADA: 'Derivada',
     EN_PROCESO: 'En Proceso',
-    PENDIENTE_INFORMACION: 'Pendiente Información',
+    PENDIENTE_INFORMACION: 'Pendiente de informacion',
     FINALIZADA: 'Finalizada',
     CERRADA: 'Cerrada',
     VENCIDA: 'Vencida',

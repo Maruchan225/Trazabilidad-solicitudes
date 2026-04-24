@@ -21,7 +21,6 @@ import type {
 type FiltrosSolicitudes = {
   busqueda?: string;
   estado?: EstadoSolicitud;
-  areaId?: number;
   tipoSolicitudId?: number;
   prioridad?: PrioridadSolicitud;
 };

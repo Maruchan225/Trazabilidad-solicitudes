@@ -1,16 +1,24 @@
 import type { Area } from '@/tipos/areas';
-import type { EstadoSolicitud, PrioridadSolicitud } from '@/tipos/comun';
+import type {
+  CanalIngreso,
+  EstadoSolicitud,
+  PrioridadSolicitud,
+} from '@/tipos/comun';
 import type { TipoSolicitud } from '@/tipos/tiposSolicitud';
 import type { Usuario } from '@/tipos/usuarios';
 
 export type Solicitud = {
   id: number;
+  /** Compatibilidad temporal: referencia externa heredada, no identificador principal visible. */
+  numeroSolicitud?: string | null;
+  correlativo: number;
   titulo: string;
   descripcion: string;
   estado: EstadoSolicitud;
   estadoActual: EstadoSolicitud;
   estadoPersistido: EstadoSolicitud;
   prioridad: PrioridadSolicitud;
+  canalIngreso: CanalIngreso;
   creadoEn: string;
   actualizadoEn: string;
   fechaVencimiento: string;
@@ -46,8 +54,8 @@ export type SolicitudPayload = {
   titulo: string;
   descripcion: string;
   prioridad?: PrioridadSolicitud;
-  asignadoAId?: number;
-  areaActualId: number;
+  canalIngreso: CanalIngreso;
+  asignadoAId: number;
   tipoSolicitudId: number;
   comentario?: string;
 };
@@ -58,7 +66,6 @@ export type AsignarSolicitudPayload = {
 };
 
 export type DerivarSolicitudPayload = {
-  areaDestinoId: number;
   asignadoAId: number;
   comentario?: string;
 };

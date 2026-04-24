@@ -1,12 +1,12 @@
 import { Prisma } from '@prisma/client';
 
-export const USUARIO_PUBLICO_ARGS = {
+export const SAFE_USER_ARGS = {
   omit: {
     contrasena: true,
   },
 } satisfies Prisma.UsuarioDefaultArgs;
 
-export const USUARIO_PUBLICO_CON_AREA_ARGS = {
+export const SAFE_USER_WITH_AREA_ARGS = {
   omit: {
     contrasena: true,
   },

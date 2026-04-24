@@ -10,7 +10,6 @@ type NombreIcono =
   | 'salir'
   | 'dashboard'
   | 'solicitudes'
-  | 'areas'
   | 'usuarios'
   | 'tipos'
   | 'reportes';
@@ -100,16 +99,6 @@ export function Icono({ nombre, className, style }: IconoProps) {
         <path d="M4 6h.01" />
         <path d="M4 12h.01" />
         <path d="M4 18h.01" />
-      </>,
-    ),
-    areas: trazo(
-      <>
-        <path d="M3 21h18" />
-        <path d="M5 21V7l7-4 7 4v14" />
-        <path d="M9 9h.01" />
-        <path d="M15 9h.01" />
-        <path d="M9 13h.01" />
-        <path d="M15 13h.01" />
       </>,
     ),
     usuarios: trazo(

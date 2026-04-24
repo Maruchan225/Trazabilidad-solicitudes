@@ -41,12 +41,13 @@ test('SolicitudesService.listar conserva visibilidad del trabajador aun con busq
 
   assert.ok(Array.isArray(findManyArgs.where.AND));
   assert.deepEqual(findManyArgs.where.AND[0], { eliminadoEn: null });
-  assert.deepEqual(findManyArgs.where.AND[1], {
-    OR: [{ asignadoAId: 7 }, { areaActualId: 3 }],
-  });
+  assert.deepEqual(findManyArgs.where.AND[1], { asignadoAId: 7 });
   assert.equal(findManyArgs.where.AND[2].prioridad, PrioridadSolicitud.ALTA);
   assert.deepEqual(findManyArgs.where.AND[2].fechaCierre, null);
-  assert.equal(findManyArgs.where.AND[2].OR.at(-1).id, 15);
+  assert.ok(findManyArgs.where.AND[2].OR.some((item) => item.id === 15));
+  assert.ok(
+    findManyArgs.where.AND[2].OR.some((item) => item.correlativo === 15),
+  );
 });
 
 test('SolicitudesService.cerrarSolicitud exige estado FINALIZADA', async () => {

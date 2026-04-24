@@ -14,23 +14,23 @@ export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const rolesRequeridos = this.reflector.getAllAndOverride<string[]>(
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(
       ROLES_KEY,
       [context.getHandler(), context.getClass()],
     );
 
-    if (!rolesRequeridos || rolesRequeridos.length === 0) {
+    if (!requiredRoles || requiredRoles.length === 0) {
       return true;
     }
 
     const request = context.switchToHttp().getRequest<RequestAutenticado>();
-    const usuario: UsuarioToken | undefined = request.user;
+    const user: UsuarioToken | undefined = request.user;
 
-    if (!usuario) {
+    if (!user) {
       return false;
     }
 
-    if (!rolesRequeridos.includes(usuario.rol)) {
+    if (!requiredRoles.includes(user.rol)) {
       throw new ForbiddenException(
         'No tiene permisos para acceder a este recurso',
       );

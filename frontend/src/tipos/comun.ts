@@ -10,3 +10,5 @@ export type EstadoSolicitud =
   | 'VENCIDA';
 
 export type PrioridadSolicitud = 'BAJA' | 'MEDIA' | 'ALTA' | 'URGENTE';
+
+export type CanalIngreso = 'PRESENCIAL' | 'CORREO';

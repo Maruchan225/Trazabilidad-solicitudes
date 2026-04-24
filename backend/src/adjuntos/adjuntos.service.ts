@@ -10,8 +10,8 @@ import { access, unlink } from 'fs/promises';
 import type { Express } from 'express';
 import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { handlePrismaError } from '../comun/prisma-error.util';
-import { USUARIO_PUBLICO_CON_AREA_ARGS } from '../comun/usuario-seguro.util';
-import { construirFiltroVisibilidadSolicitudes } from '../comun/visibilidad-solicitudes.util';
+import { SAFE_USER_WITH_AREA_ARGS } from '../comun/usuario-seguro.util';
+import { buildRequestsVisibilityFilter } from '../comun/visibilidad-solicitudes.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -27,11 +27,11 @@ export class AdjuntosService {
       throw new BadRequestException('Debe adjuntar un archivo valido');
     }
 
-    const solicitud = await this.asegurarSolicitudVisible(solicitudId, usuario);
+    const request = await this.ensureVisibleRequest(solicitudId, usuario);
 
     try {
-      const adjuntoCreado = await this.prisma.$transaction(async (tx) => {
-        const adjunto = await tx.adjunto.create({
+      const createdAttachment = await this.prisma.$transaction(async (tx) => {
+        const attachment = await tx.adjunto.create({
           data: {
             nombreOriginal: archivo.originalname,
             nombreArchivo: archivo.filename,
@@ -41,37 +41,36 @@ export class AdjuntosService {
             solicitudId,
             subidoPorId: usuario.id,
           },
-          include: this.adjuntoInclude,
+          include: this.attachmentInclude,
         });
 
-        await this.crearHistorialAdjunto(tx, {
+        await this.createAttachmentHistory(tx, {
           solicitudId,
           usuarioId: usuario.id,
           accion: AccionHistorialSolicitud.ADJUNTO_SUBIDO,
-          estadoOrigen: solicitud.estado,
-          estadoDestino: solicitud.estado,
-          areaDestinoId: solicitud.areaActualId,
-          asignadoDestinoId: solicitud.asignadoAId,
+          estadoOrigen: request.estado,
+          estadoDestino: request.estado,
+          asignadoDestinoId: request.asignadoAId,
           comentario: `Adjunto subido: ${archivo.originalname}`,
         });
 
-        return adjunto;
+        return attachment;
       });
 
-      return adjuntoCreado;
+      return createdAttachment;
     } catch (error) {
       handlePrismaError(error, 'adjunto');
     }
   }
 
   async listarPorSolicitud(solicitudId: number, usuario: UsuarioToken) {
-    await this.asegurarSolicitudVisible(solicitudId, usuario);
+    await this.ensureVisibleRequest(solicitudId, usuario);
 
     return this.prisma.adjunto.findMany({
       where: {
         solicitudId,
       },
-      include: this.adjuntoInclude,
+      include: this.attachmentInclude,
       orderBy: {
         creadoEn: 'desc',
       },
@@ -79,19 +78,19 @@ export class AdjuntosService {
   }
 
   async obtenerInformacion(id: number, usuario: UsuarioToken) {
-    const adjunto = await this.asegurarAdjuntoVisible(id, usuario);
-    return adjunto;
+    const attachment = await this.ensureVisibleAttachment(id, usuario);
+    return attachment;
   }
 
   async obtenerArchivoAdjunto(id: number, usuario: UsuarioToken) {
-    const adjunto = await this.asegurarAdjuntoVisible(id, usuario);
+    const attachment = await this.ensureVisibleAttachment(id, usuario);
 
     try {
-      await access(adjunto.ruta);
+      await access(attachment.ruta);
     } catch (error) {
-      const codigo = (error as NodeJS.ErrnoException).code;
+      const code = (error as NodeJS.ErrnoException).code;
 
-      if (codigo === 'ENOENT') {
+      if (code === 'ENOENT') {
         throw new NotFoundException(
           `El archivo del adjunto ${id} no se encuentra disponible`,
         );
@@ -101,113 +100,112 @@ export class AdjuntosService {
     }
 
     return {
-      adjunto,
-      stream: createReadStream(adjunto.ruta),
+      adjunto: attachment,
+      stream: createReadStream(attachment.ruta),
     };
   }
 
   async eliminarAdjunto(id: number, usuario: UsuarioToken) {
-    const adjunto = await this.asegurarAdjuntoVisible(id, usuario);
-    this.validarPermisoEliminacionAdjunto(adjunto.subidoPorId, usuario);
+    const attachment = await this.ensureVisibleAttachment(id, usuario);
+    this.validateAttachmentDeletionPermission(attachment.subidoPorId, usuario);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.adjunto.delete({
         where: { id },
       });
 
-      await this.crearHistorialAdjunto(tx, {
-        solicitudId: adjunto.solicitudId,
+      await this.createAttachmentHistory(tx, {
+        solicitudId: attachment.solicitudId,
         usuarioId: usuario.id,
         accion: AccionHistorialSolicitud.ADJUNTO_ELIMINADO,
-        estadoOrigen: adjunto.solicitud.estado,
-        estadoDestino: adjunto.solicitud.estado,
-        areaDestinoId: adjunto.solicitud.areaActualId,
-        asignadoDestinoId: adjunto.solicitud.asignadoAId,
-        comentario: `Adjunto eliminado: ${adjunto.nombreOriginal}`,
+        estadoOrigen: attachment.solicitud.estado,
+        estadoDestino: attachment.solicitud.estado,
+        asignadoDestinoId: attachment.solicitud.asignadoAId,
+        comentario: `Adjunto eliminado: ${attachment.nombreOriginal}`,
       });
     });
 
-    await this.eliminarArchivoSiExiste(adjunto.ruta);
+    await this.deleteFileIfExists(attachment.ruta);
 
     return {
       message: `Adjunto ${id} eliminado correctamente`,
     };
   }
 
-  private async asegurarSolicitudVisible(
+  private async ensureVisibleRequest(
     solicitudId: number,
     usuario: UsuarioToken,
   ) {
-    const solicitud = await this.prisma.solicitud.findFirst({
+    const request = await this.prisma.solicitud.findFirst({
       where: {
         id: solicitudId,
         eliminadoEn: null,
-        ...construirFiltroVisibilidadSolicitudes(usuario),
+        ...buildRequestsVisibilityFilter(usuario),
       },
     });
 
-    if (!solicitud) {
+    if (!request) {
       throw new NotFoundException(
         `Solicitud con id ${solicitudId} no encontrada`,
       );
     }
 
-    return solicitud;
+    return request;
   }
 
-  private async asegurarAdjuntoVisible(id: number, usuario: UsuarioToken) {
-    const adjunto = await this.prisma.adjunto.findFirst({
+  private async ensureVisibleAttachment(id: number, usuario: UsuarioToken) {
+    const attachment = await this.prisma.adjunto.findFirst({
       where: {
         id,
         solicitud: {
           eliminadoEn: null,
-          ...construirFiltroVisibilidadSolicitudes(usuario),
+          ...buildRequestsVisibilityFilter(usuario),
         },
       },
       include: {
-        ...this.adjuntoInclude,
+        ...this.attachmentInclude,
         solicitud: true,
       },
     });
 
-    if (!adjunto) {
+    if (!attachment) {
       throw new NotFoundException(`Adjunto con id ${id} no encontrado`);
     }
 
-    return adjunto;
+    return attachment;
   }
 
-  private validarPermisoEliminacionAdjunto(
-    subidoPorId: number | null,
+  private validateAttachmentDeletionPermission(
+    uploadedById: number | null,
     usuario: UsuarioToken,
   ) {
-    if (usuario.rol === RolUsuario.TRABAJADOR && subidoPorId !== usuario.id) {
+    if (usuario.rol === RolUsuario.TRABAJADOR && uploadedById !== usuario.id) {
       throw new ForbiddenException(
         'Solo puede eliminar adjuntos que usted haya subido',
       );
     }
   }
 
-  private async eliminarArchivoSiExiste(ruta: string) {
+  private async deleteFileIfExists(path: string) {
     try {
-      await unlink(ruta);
+      await unlink(path);
     } catch (error) {
-      const codigo = (error as NodeJS.ErrnoException).code;
+      const code = (error as NodeJS.ErrnoException).code;
 
-      if (codigo !== 'ENOENT') {
+      if (code !== 'ENOENT') {
         throw error;
       }
     }
   }
 
-  private crearHistorialAdjunto(
+  private createAttachmentHistory(
     tx: Prisma.TransactionClient,
     data: Prisma.HistorialSolicitudUncheckedCreateInput,
   ) {
     return tx.historialSolicitud.create({ data });
   }
 
-  private readonly adjuntoInclude = {
-    subidoPor: USUARIO_PUBLICO_CON_AREA_ARGS,
+  private readonly attachmentInclude = {
+    subidoPor: SAFE_USER_WITH_AREA_ARGS,
   } satisfies Prisma.AdjuntoInclude;
 }

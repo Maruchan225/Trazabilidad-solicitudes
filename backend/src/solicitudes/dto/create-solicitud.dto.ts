@@ -1,4 +1,5 @@
-import { PrioridadSolicitud } from '@prisma/client';
+import { CanalIngreso, PrioridadSolicitud } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
@@ -24,11 +25,18 @@ export class CreateSolicitudDto {
   prioridad?: PrioridadSolicitud;
 
   @IsOptional()
-  @IsInt()
-  asignadoAId?: number;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  /** Compatibilidad temporal: referencia externa opcional, no identificador operativo principal. */
+  numeroSolicitud?: string;
+
+  @IsEnum(CanalIngreso)
+  canalIngreso: CanalIngreso;
 
   @IsInt()
-  areaActualId: number;
+  asignadoAId: number;
 
   @IsInt()
   tipoSolicitudId: number;

@@ -30,6 +30,11 @@ enum PrioridadSolicitud {
   URGENTE
 }
 
+enum CanalIngreso {
+  PRESENCIAL
+  CORREO
+}
+
 enum AccionHistorialSolicitud {
   CREADA
   ASIGNADA
@@ -102,6 +107,9 @@ model Solicitud {
   descripcion         String
   estado              EstadoSolicitud     @default(INGRESADA)
   prioridad           PrioridadSolicitud  @default(MEDIA)
+  numeroSolicitud     String?             @unique
+  correlativo         Int                 @unique
+  canalIngreso        CanalIngreso
   creadoEn            DateTime            @default(now())
   actualizadoEn       DateTime            @updatedAt
   fechaVencimiento    DateTime
@@ -158,7 +166,7 @@ model HistorialSolicitud {
   asignadoDestinoId     Int?
   comentario            String?
   creadoEn              DateTime                 @default(now())
-  solicitud             Solicitud                @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  solicitud             Solicitud                @relation(fields: [solicitudId], references: [id], onDelete: Restrict)
   usuario               Usuario                  @relation("HistorialActor", fields: [usuarioId], references: [id])
   areaOrigen            Area?                    @relation("HistorialAreaOrigen", fields: [areaOrigenId], references: [id])
   areaDestino           Area?                    @relation("HistorialAreaDestino", fields: [areaDestinoId], references: [id])

@@ -1,5 +1,9 @@
-import type { Area } from '@/tipos/areas';
-import type { EstadoSolicitud, PrioridadSolicitud, RolUsuario } from '@/tipos/comun';
+import type {
+  CanalIngreso,
+  EstadoSolicitud,
+  PrioridadSolicitud,
+  RolUsuario,
+} from '@/tipos/comun';
 import type { TipoSolicitud } from '@/tipos/tiposSolicitud';
 import type { Usuario } from '@/tipos/usuarios';
 
@@ -24,7 +28,7 @@ export const OPCIONES_ESTADO_SOLICITUD: Opcion<EstadoSolicitud>[] = [
   { label: 'Ingresada', value: 'INGRESADA' },
   { label: 'Derivada', value: 'DERIVADA' },
   { label: 'En proceso', value: 'EN_PROCESO' },
-  { label: 'Pendiente informacion', value: 'PENDIENTE_INFORMACION' },
+  { label: 'Pendiente de informacion', value: 'PENDIENTE_INFORMACION' },
   { label: 'Finalizada', value: 'FINALIZADA' },
   { label: 'Cerrada', value: 'CERRADA' },
   { label: 'Vencida', value: 'VENCIDA' },
@@ -33,13 +37,13 @@ export const OPCIONES_ESTADO_SOLICITUD: Opcion<EstadoSolicitud>[] = [
 export const OPCIONES_ESTADO_EDITABLE_SOLICITUD: Opcion<EstadoSolicitud>[] = [
   { label: 'Ingresada', value: 'INGRESADA' },
   { label: 'En proceso', value: 'EN_PROCESO' },
-  { label: 'Pendiente informacion', value: 'PENDIENTE_INFORMACION' },
+  { label: 'Pendiente de informacion', value: 'PENDIENTE_INFORMACION' },
 ];
 
 export const OPCIONES_ESTADO_GESTION_SOLICITUD: Opcion<EstadoSolicitud>[] = [
   { label: 'Ingresada', value: 'INGRESADA' },
   { label: 'En proceso', value: 'EN_PROCESO' },
-  { label: 'Pendiente informacion', value: 'PENDIENTE_INFORMACION' },
+  { label: 'Pendiente de informacion', value: 'PENDIENTE_INFORMACION' },
   { label: 'Finalizada', value: 'FINALIZADA' },
 ];
 
@@ -57,14 +61,15 @@ export const OPCIONES_FILTRO_PRIORIDAD_SOLICITUD: Opcion<PrioridadSolicitud>[] =
   { label: 'URGENTE', value: 'URGENTE' },
 ];
 
+export const OPCIONES_CANAL_INGRESO: Opcion<CanalIngreso>[] = [
+  { label: 'Presencial', value: 'PRESENCIAL' },
+  { label: 'Correo', value: 'CORREO' },
+];
+
 export const OPCIONES_ESTADO_ACTIVO = [
   { label: 'Activo', value: 'activo' },
   { label: 'Inactivo', value: 'inactivo' },
 ];
-
-export function mapearOpcionesAreas(areas: Area[]) {
-  return areas.map((area) => ({ label: area.nombre, value: area.id }));
-}
 
 export function mapearOpcionesTiposSolicitud(tipos: TipoSolicitud[]) {
   return tipos.map((tipo) => ({ label: tipo.nombre, value: tipo.id }));

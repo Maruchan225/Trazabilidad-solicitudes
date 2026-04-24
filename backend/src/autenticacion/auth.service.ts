@@ -12,38 +12,38 @@ export class AuthService {
   ) {}
 
   async iniciarSesion(loginDto: LoginDto) {
-    const usuario = await this.usuariosService.buscarPorCorreo(loginDto.email);
+    const user = await this.usuariosService.buscarPorCorreo(loginDto.email);
 
-    if (!usuario || !usuario.activo) {
+    if (!user || !user.activo) {
       throw new UnauthorizedException('Credenciales invalidas');
     }
 
-    const contrasenaValida = await this.usuariosService.validarContrasena(
+    const isPasswordValid = await this.usuariosService.validarContrasena(
       loginDto.contrasena,
-      usuario.contrasena,
+      user.contrasena,
     );
 
-    if (!contrasenaValida) {
+    if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciales invalidas');
     }
 
     const payload: UsuarioToken = {
-      id: usuario.id,
-      correo: usuario.email,
-      rol: usuario.rol,
-      areaId: usuario.areaId,
+      id: user.id,
+      correo: user.email,
+      rol: user.rol,
+      areaId: user.areaId,
     };
 
     return {
       access_token: await this.jwtService.signAsync(payload),
       usuario: {
-        id: usuario.id,
-        correo: usuario.email,
-        rut: usuario.rut,
-        rol: usuario.rol,
-        areaId: usuario.areaId,
-        nombres: usuario.nombres,
-        apellidos: usuario.apellidos,
+        id: user.id,
+        correo: user.email,
+        rut: user.rut,
+        rol: user.rol,
+        areaId: user.areaId,
+        nombres: user.nombres,
+        apellidos: user.apellidos,
       },
     };
   }

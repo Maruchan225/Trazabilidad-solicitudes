@@ -96,6 +96,7 @@ test('AdjuntosService.subirAdjunto registra adjunto e historial', async () => {
   );
   assert.equal(registros.length, 1);
   assert.equal(registros[0].accion, AccionHistorialSolicitud.ADJUNTO_SUBIDO);
+  assert.equal(registros[0].areaDestinoId, undefined);
 });
 
 test('AdjuntosService.eliminarAdjunto impide que un trabajador elimine archivos de otro usuario', async () => {

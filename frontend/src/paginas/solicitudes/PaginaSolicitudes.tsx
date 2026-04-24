@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table, Tag } from 'antd';
+import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FormularioSolicitud } from '@/componentes/solicitudes/FormularioSolicitud';
@@ -6,11 +6,11 @@ import { Icono } from '@/componentes/ui/Icono';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
 import { TagEstadoSolicitud } from '@/componentes/ui/tags/TagEstadoSolicitud';
 import { TagPrioridad } from '@/componentes/ui/tags/TagPrioridad';
+import { TagVencimientoSolicitud } from '@/componentes/ui/tags/TagVencimientoSolicitud';
 import { useAutenticacion } from '@/ganchos/useAutenticacion';
 import { useConsulta } from '@/ganchos/useConsulta';
 import { useMutacion } from '@/ganchos/useMutacion';
 import { useValorDebounceado } from '@/ganchos/useValorDebounceado';
-import { areasService } from '@/servicios/areas/areas.service';
 import { solicitudesService } from '@/servicios/solicitudes/solicitudes.service';
 import { tiposSolicitudService } from '@/servicios/tipos-solicitud/tiposSolicitud.service';
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
@@ -24,10 +24,13 @@ import { compararFechas, formatearFechaHora } from '@/utilidades/fechas';
 import {
   OPCIONES_ESTADO_SOLICITUD,
   OPCIONES_FILTRO_PRIORIDAD_SOLICITUD,
-  mapearOpcionesAreas,
   mapearOpcionesTiposSolicitud,
 } from '@/utilidades/opciones';
 import { puedeCrearSolicitudes } from '@/utilidades/permisos';
+import {
+  calcularDiasHastaVencimiento,
+  ordenarSolicitudesPorUrgencia,
+} from '@/utilidades/solicitudesOperativas';
 
 const RETRASO_BUSQUEDA_MS = 300;
 const ESTADOS_SOLICITUD_VALIDOS: EstadoSolicitud[] = [
@@ -71,7 +74,6 @@ function parsearPrioridadParam(valor: string | null) {
 function construirParametrosFiltros(params: {
   busqueda?: string;
   estado?: EstadoSolicitud;
-  areaId?: number;
   tipoSolicitudId?: number;
   prioridad?: PrioridadSolicitud;
 }) {
@@ -84,10 +86,6 @@ function construirParametrosFiltros(params: {
 
   if (params.estado) {
     searchParams.set('estado', params.estado);
-  }
-
-  if (params.areaId) {
-    searchParams.set('areaId', String(params.areaId));
   }
 
   if (params.tipoSolicitudId) {
@@ -105,7 +103,6 @@ function obtenerFiltrosDesdeQuery(searchParams: URLSearchParams) {
   return {
     busqueda: searchParams.get('busqueda') ?? '',
     estadoFiltro: parsearEstadoParam(searchParams.get('estado')),
-    areaFiltro: parsearNumeroParam(searchParams.get('areaId')),
     tipoFiltro: parsearNumeroParam(searchParams.get('tipoSolicitudId')),
     prioridadFiltro: parsearPrioridadParam(searchParams.get('prioridad')),
   };
@@ -120,9 +117,6 @@ export function PaginaSolicitudes() {
   const { sesion } = useAutenticacion();
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoSolicitud | undefined>(
     filtrosIniciales.estadoFiltro,
-  );
-  const [areaFiltro, setAreaFiltro] = useState<number | undefined>(
-    filtrosIniciales.areaFiltro,
   );
   const [tipoFiltro, setTipoFiltro] = useState<number | undefined>(
     filtrosIniciales.tipoFiltro,
@@ -143,43 +137,46 @@ export function PaginaSolicitudes() {
       solicitudesService.listar({
         busqueda: busquedaAplicada || undefined,
         estado: estadoFiltro,
-        areaId: areaFiltro,
         tipoSolicitudId: tipoFiltro,
         prioridad: prioridadFiltro,
       }),
-    [busquedaAplicada, estadoFiltro, areaFiltro, tipoFiltro, prioridadFiltro],
+    [busquedaAplicada, estadoFiltro, tipoFiltro, prioridadFiltro],
   );
-  const areas = useConsulta(() => areasService.listar(), []);
   const tiposSolicitud = useConsulta(() => tiposSolicitudService.listar(), []);
   const usuarios = useConsulta(() => usuariosService.listar(), []);
   const [form] = Form.useForm<SolicitudPayload>();
   const [modalAbierto, setModalAbierto] = useState(false);
   const { loading: guardando, ejecutar } = useMutacion();
-  const solicitudes = consulta.data ?? [];
-  const areasActivas = (areas.data ?? []).filter((area) => area.activo);
+  const solicitudes = ordenarSolicitudesPorUrgencia(consulta.data ?? []);
   const tiposActivos = (tiposSolicitud.data ?? []).filter((tipo) => tipo.activo);
-  const areaSeleccionada = Form.useWatch('areaActualId', form);
+  const tiposDisponiblesParaCrear = tiposActivos.filter(
+    (tipo) => typeof tipo.diasSla === 'number' && tipo.diasSla > 0,
+  );
   const puedeCrear = puedeCrearSolicitudes(sesion?.usuario.rol);
   const trabajadoresDisponibles = (usuarios.data ?? []).filter(
-    (usuario) =>
-      usuario.rol === 'TRABAJADOR' &&
-      (!areaSeleccionada || usuario.area.id === areaSeleccionada),
+    (usuario) => usuario.rol === 'TRABAJADOR' && usuario.activo,
   );
-  const filtrosArea = mapearOpcionesAreas(areasActivas);
   const filtrosTipoSolicitud = mapearOpcionesTiposSolicitud(tiposActivos);
   const hayFiltrosAplicados =
     busquedaAplicada.length > 0 ||
     estadoFiltro !== undefined ||
-    areaFiltro !== undefined ||
     tipoFiltro !== undefined ||
     prioridadFiltro !== undefined;
   const mensajeSinResultados = hayFiltrosAplicados
     ? 'No se encontraron solicitudes con los filtros aplicados.'
     : 'No hay solicitudes registradas.';
+  const solicitudesVencidas = solicitudes.filter((solicitud) => solicitud.estaVencida).length;
+  const solicitudesPorVencer = solicitudes.filter((solicitud) => {
+    const dias = calcularDiasHastaVencimiento(
+      solicitud.fechaVencimiento,
+      solicitud.fechaCierre,
+    );
+
+    return typeof dias === 'number' && dias >= 0 && dias <= 3;
+  }).length;
   const filtrosActuales = construirParametrosFiltros({
     busqueda: busquedaAplicada,
     estado: estadoFiltro,
-    areaId: areaFiltro,
     tipoSolicitudId: tipoFiltro,
     prioridad: prioridadFiltro,
   });
@@ -195,7 +192,6 @@ export function PaginaSolicitudes() {
     setBusqueda(filtrosExternos.busqueda);
     sincronizarBusquedaAplicada(filtrosExternos.busqueda.trim());
     setEstadoFiltro(filtrosExternos.estadoFiltro);
-    setAreaFiltro(filtrosExternos.areaFiltro);
     setTipoFiltro(filtrosExternos.tipoFiltro);
     setPrioridadFiltro(filtrosExternos.prioridadFiltro);
     ultimaQuerySincronizadaRef.current = queryActual;
@@ -205,7 +201,6 @@ export function PaginaSolicitudes() {
     const parametrosEsperados = construirParametrosFiltros({
       busqueda: busquedaAplicada,
       estado: estadoFiltro,
-      areaId: areaFiltro,
       tipoSolicitudId: tipoFiltro,
       prioridad: prioridadFiltro,
     }).toString();
@@ -218,7 +213,6 @@ export function PaginaSolicitudes() {
     ultimaQuerySincronizadaRef.current = parametrosEsperados;
     setSearchParams(new URLSearchParams(parametrosEsperados), { replace: true });
   }, [
-    areaFiltro,
     busquedaAplicada,
     estadoFiltro,
     prioridadFiltro,
@@ -237,7 +231,7 @@ export function PaginaSolicitudes() {
 
   function abrirCrear() {
     form.resetFields();
-    form.setFieldsValue({ prioridad: 'MEDIA' });
+    form.setFieldsValue({ prioridad: 'MEDIA', canalIngreso: 'PRESENCIAL' });
     setModalAbierto(true);
   }
 
@@ -247,7 +241,7 @@ export function PaginaSolicitudes() {
       ...values,
       titulo: normalizarTextoRequerido(values.titulo),
       descripcion: normalizarTextoRequerido(values.descripcion),
-      asignadoAId: values.asignadoAId ?? undefined,
+      asignadoAId: values.asignadoAId,
       comentario: normalizarTextoOpcional(comentario),
     };
 
@@ -267,26 +261,47 @@ export function PaginaSolicitudes() {
   return (
     <PaginaModulo
       titulo="Solicitudes"
-      descripcion="Listado de solicitudes ingresadas al sistema."
+      descripcion="Operacion diaria de solicitudes DOM con foco en responsable, prioridad, canal y vencimiento."
     >
-      <Card
-        className="rounded-3xl"
-        extra={
-          <Space>
-            <Button onClick={() => void consulta.refetch()}>Actualizar</Button>
-            {puedeCrear ? (
-              <Button type="primary" icon={<Icono nombre="mas" />} onClick={abrirCrear}>
-                Nueva Solicitud
-              </Button>
-            ) : null}
-          </Space>
-        }
-      >
-        <Space wrap className="mb-4">
+      <Space direction="vertical" size={16} className="w-full">
+        {solicitudesVencidas > 0 ? (
+          <Alert
+            type="error"
+            showIcon
+            message={`Hay ${solicitudesVencidas} solicitud(es) vencida(s) en el listado actual.`}
+          />
+        ) : solicitudesPorVencer > 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            message={`Hay ${solicitudesPorVencer} solicitud(es) por vencer en el listado actual.`}
+          />
+        ) : (
+          <Alert
+            type="success"
+            showIcon
+            message="No hay solicitudes vencidas ni proximas a vencer en el listado actual."
+          />
+        )}
+
+        <Card
+          className="rounded-3xl"
+          extra={
+            <Space>
+              <Button onClick={() => void consulta.refetch()}>Actualizar</Button>
+              {puedeCrear ? (
+                <Button type="primary" icon={<Icono nombre="mas" />} onClick={abrirCrear}>
+                  Nueva Solicitud
+                </Button>
+              ) : null}
+            </Space>
+          }
+        >
+          <Space wrap className="mb-4">
           <Input.Search
             allowClear
             className="min-w-64"
-            placeholder="Buscar por ID, titulo, descripcion, area, tipo o asignado"
+            placeholder="Buscar por correlativo, referencia externa, titulo, tipo o responsable"
             value={busqueda}
             onChange={(event) => setBusqueda(event.target.value)}
           />
@@ -299,17 +314,6 @@ export function PaginaSolicitudes() {
             onChange={(valor) => {
               aplicarBusquedaPendiente();
               setEstadoFiltro(valor);
-            }}
-          />
-          <Select<number>
-            allowClear
-            className="min-w-44"
-            placeholder="Filtrar area"
-            value={areaFiltro}
-            options={filtrosArea}
-            onChange={(valor) => {
-              aplicarBusquedaPendiente();
-              setAreaFiltro(valor);
             }}
           />
           <Select<number>
@@ -339,29 +343,30 @@ export function PaginaSolicitudes() {
               setBusqueda('');
               sincronizarBusquedaAplicada('');
               setEstadoFiltro(undefined);
-              setAreaFiltro(undefined);
               setTipoFiltro(undefined);
               setPrioridadFiltro(undefined);
             }}
           >
             Limpiar filtros
           </Button>
-        </Space>
+          </Space>
 
-        {consulta.error ? (
-          <Alert type="error" message={consulta.error} showIcon />
-        ) : (
-          <Table<Solicitud>
-            loading={consulta.loading}
-            rowKey="id"
-            dataSource={solicitudes}
-            pagination={{ pageSize: 8 }}
-            locale={{ emptyText: mensajeSinResultados }}
-            columns={[
+          {consulta.error ? (
+            <Alert type="error" message={consulta.error} showIcon />
+          ) : (
+            <Table<Solicitud>
+              loading={consulta.loading}
+              rowKey="id"
+              dataSource={solicitudes}
+              pagination={{ pageSize: 8 }}
+              locale={{ emptyText: mensajeSinResultados }}
+              columns={[
               {
-                title: 'ID',
-                dataIndex: 'id',
-                sorter: (a, b) => a.id - b.id,
+                title: 'Correlativo',
+                dataIndex: 'correlativo',
+                sorter: (a, b) => (a.correlativo ?? 0) - (b.correlativo ?? 0),
+                render: (correlativo: number | null | undefined) =>
+                  correlativo ?? '-',
               },
               {
                 title: 'Titulo',
@@ -379,22 +384,18 @@ export function PaginaSolicitudes() {
               {
                 title: 'Fecha de creacion',
                 dataIndex: 'creadoEn',
-                defaultSortOrder: 'descend',
                 sorter: (a, b) => compararFechas(a.creadoEn, b.creadoEn),
                 render: (creadoEn: string) => formatearFechaHora(creadoEn),
               },
               {
                 title: 'Estado',
                 dataIndex: 'estadoActual',
-                render: (estado: string, record) => (
+                render: (_, record) => (
                   <Space>
                     <TagEstadoSolicitud
                       estado={record.estadoActual}
                       estaVencida={record.estaVencida}
                     />
-                    {record.estaVencida && estado !== 'VENCIDA' ? (
-                      <Tag color="#111827">Vencida</Tag>
-                    ) : null}
                   </Space>
                 ),
               },
@@ -403,14 +404,24 @@ export function PaginaSolicitudes() {
                 dataIndex: 'fechaVencimiento',
                 sorter: (a, b) =>
                   compararFechas(a.fechaVencimiento, b.fechaVencimiento),
-                render: (fechaVencimiento: string) =>
-                  formatearFechaHora(fechaVencimiento),
+                render: (fechaVencimiento: string, record) =>
+                  (
+                    <Space direction="vertical" size={4}>
+                      <span>{formatearFechaHora(fechaVencimiento)}</span>
+                      <TagVencimientoSolicitud
+                        fechaVencimiento={fechaVencimiento}
+                        fechaCierre={record.fechaCierre}
+                        estaVencida={record.estaVencida}
+                      />
+                    </Space>
+                  ),
               },
               {
-                title: 'Area',
-                sorter: (a, b) =>
-                  a.areaActual.nombre.localeCompare(b.areaActual.nombre),
-                render: (_, record) => record.areaActual.nombre,
+                title: 'Responsable',
+                render: (_, record) =>
+                  record.asignadoA
+                    ? `${record.asignadoA.nombres} ${record.asignadoA.apellidos}`
+                    : 'Sin responsable asignado (registro heredado)',
               },
               {
                 title: 'Tipo',
@@ -419,16 +430,27 @@ export function PaginaSolicitudes() {
                 render: (_, record) => record.tipoSolicitud.nombre,
               },
               {
+                title: 'Canal',
+                dataIndex: 'canalIngreso',
+                render: (canalIngreso: string | null | undefined) =>
+                  canalIngreso === 'PRESENCIAL'
+                    ? 'Presencial'
+                    : canalIngreso === 'CORREO'
+                      ? 'Correo'
+                      : '-',
+              },
+              {
                 title: 'Prioridad',
                 dataIndex: 'prioridad',
                 render: (prioridad: PrioridadSolicitud) => (
                   <TagPrioridad prioridad={prioridad} />
                 ),
               },
-            ]}
-          />
-        )}
-      </Card>
+              ]}
+            />
+          )}
+        </Card>
+      </Space>
 
       <Modal
         title="Nueva solicitud"
@@ -441,13 +463,10 @@ export function PaginaSolicitudes() {
       >
         <FormularioSolicitud
           form={form}
-          areas={areasActivas}
-          tiposSolicitud={tiposActivos}
+          tiposSolicitud={tiposDisponiblesParaCrear}
           trabajadoresDisponibles={trabajadoresDisponibles}
-          loadingAreas={areas.loading}
           loadingTipos={tiposSolicitud.loading}
           loadingUsuarios={usuarios.loading}
-          areaSeleccionada={areaSeleccionada}
           onFinish={(values) => void guardar(values)}
         />
       </Modal>

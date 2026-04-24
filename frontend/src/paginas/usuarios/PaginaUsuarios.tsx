@@ -18,17 +18,12 @@ import {
   construirPayloadUsuario,
   obtenerValoresFormularioUsuario,
 } from '@/utilidades/usuarios';
-import {
-  OPCIONES_ESTADO_ACTIVO,
-  OPCIONES_FILTRO_ROL_USUARIO,
-  mapearOpcionesAreas,
-} from '@/utilidades/opciones';
+import { OPCIONES_ESTADO_ACTIVO, OPCIONES_FILTRO_ROL_USUARIO } from '@/utilidades/opciones';
 
 export function PaginaUsuarios() {
   const { message } = App.useApp();
   const { sesion } = useAutenticacion();
   const [rolFiltro, setRolFiltro] = useState<RolUsuario>();
-  const [areaFiltro, setAreaFiltro] = useState<number>();
   const [activoFiltro, setActivoFiltro] = useState<'activo' | 'inactivo'>();
   const [busqueda, setBusqueda] = useState('');
   const { valorDebounceado: busquedaAplicada } = useValorDebounceado(
@@ -40,11 +35,10 @@ export function PaginaUsuarios() {
       usuariosService.listar({
         busqueda: busquedaAplicada || undefined,
         rol: rolFiltro,
-        areaId: areaFiltro,
         activo:
           activoFiltro === undefined ? undefined : activoFiltro === 'activo',
       }),
-    [busquedaAplicada, rolFiltro, areaFiltro, activoFiltro],
+    [busquedaAplicada, rolFiltro, activoFiltro],
   );
   const areas = useConsulta(() => areasService.listar(), []);
   const [form] = Form.useForm<UsuarioPayload>();
@@ -53,12 +47,11 @@ export function PaginaUsuarios() {
   const { loading: guardando, ejecutar } = useMutacion();
   const usuarios = consulta.data ?? [];
   const areasActivas = (areas.data ?? []).filter((area) => area.activo);
+  const areaTecnicaPredeterminadaId = areasActivas[0]?.id;
   const puedeGestionar = puedeGestionarCatalogos(sesion?.usuario.rol);
-  const filtrosArea = mapearOpcionesAreas(areasActivas);
   const hayFiltrosAplicados =
     busqueda.trim().length > 0 ||
     rolFiltro !== undefined ||
-    areaFiltro !== undefined ||
     activoFiltro !== undefined;
   const mensajeSinResultados = hayFiltrosAplicados
     ? 'No se encontraron usuarios con los filtros aplicados.'
@@ -71,7 +64,10 @@ export function PaginaUsuarios() {
   function abrirCrear() {
     setUsuarioEditando(null);
     form.resetFields();
-    form.setFieldsValue(obtenerValoresFormularioUsuario());
+    form.setFieldsValue({
+      ...obtenerValoresFormularioUsuario(),
+      areaId: areaTecnicaPredeterminadaId,
+    });
     setModalAbierto(true);
   }
 
@@ -82,7 +78,18 @@ export function PaginaUsuarios() {
   }
 
   async function guardar(values: UsuarioPayload) {
-    const payload = construirPayloadUsuario(values);
+    const payloadBase = construirPayloadUsuario(values);
+    const payload = {
+      ...payloadBase,
+      areaId: payloadBase.areaId ?? areaTecnicaPredeterminadaId,
+    };
+
+    if (typeof payload.areaId !== 'number') {
+      message.error(
+        'No existe una configuracion tecnica disponible para registrar usuarios en esta instancia DOM.',
+      );
+      return;
+    }
 
     await ejecutar(
       () =>
@@ -142,21 +149,35 @@ export function PaginaUsuarios() {
   return (
     <PaginaModulo
       titulo="Usuarios"
-      descripcion="Listado de usuarios y sus roles dentro del sistema municipal."
+      descripcion="Listado de usuarios y sus roles dentro de la instancia DOM."
     >
       <Card
         className="rounded-3xl"
         extra={
           puedeGestionar ? (
-            <Button type="primary" onClick={abrirCrear}>Nuevo usuario</Button>
+            <Button
+              type="primary"
+              onClick={abrirCrear}
+              disabled={!areaTecnicaPredeterminadaId}
+            >
+              Nuevo usuario
+            </Button>
           ) : null
         }
       >
+        {!areas.loading && !areaTecnicaPredeterminadaId ? (
+          <Alert
+            className="mb-4"
+            type="warning"
+            showIcon
+            message="No existe una configuracion tecnica de DOM disponible para crear nuevos usuarios."
+          />
+        ) : null}
         <Space wrap className="mb-4">
           <Input.Search
             allowClear
             className="min-w-64"
-            placeholder="Buscar por nombre, RUT, correo, rol o area"
+            placeholder="Buscar por nombre, RUT, correo o rol"
             value={busqueda}
             onChange={(event) => setBusqueda(event.target.value)}
           />
@@ -167,14 +188,6 @@ export function PaginaUsuarios() {
             value={rolFiltro}
             options={OPCIONES_FILTRO_ROL_USUARIO}
             onChange={setRolFiltro}
-          />
-          <Select<number>
-            allowClear
-            className="min-w-44"
-            placeholder="Filtrar area"
-            value={areaFiltro}
-            options={filtrosArea}
-            onChange={setAreaFiltro}
           />
           <Select<'activo' | 'inactivo'>
             allowClear
@@ -188,7 +201,6 @@ export function PaginaUsuarios() {
             onClick={() => {
               setBusqueda('');
               setRolFiltro(undefined);
-              setAreaFiltro(undefined);
               setActivoFiltro(undefined);
             }}
           >
@@ -233,12 +245,6 @@ export function PaginaUsuarios() {
                 title: 'Rol',
                 dataIndex: 'rol',
                 sorter: (a, b) => a.rol.localeCompare(b.rol),
-              },
-              {
-                title: 'Area',
-                sorter: (a, b) =>
-                  (a.area?.nombre ?? '').localeCompare(b.area?.nombre ?? ''),
-                render: (_, record) => record.area?.nombre ?? 'Sin area',
               },
               {
                 title: 'Solicitudes',
@@ -287,8 +293,6 @@ export function PaginaUsuarios() {
       >
         <FormularioUsuario
           form={form}
-          areas={areasActivas}
-          loadingAreas={areas.loading}
           modo={usuarioEditando ? 'editar' : 'crear'}
           onFinish={(values) => void guardar(values)}
         />

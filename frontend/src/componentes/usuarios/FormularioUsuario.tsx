@@ -1,23 +1,18 @@
 import { Form, Input, Select, Switch } from 'antd';
 import type { FormInstance } from 'antd/es/form';
 import type { RolUsuario } from '@/tipos/comun';
-import type { Area } from '@/tipos/areas';
 import type { UsuarioPayload } from '@/tipos/usuarios';
-import { OPCIONES_ROL_USUARIO, mapearOpcionesAreas } from '@/utilidades/opciones';
+import { OPCIONES_ROL_USUARIO } from '@/utilidades/opciones';
 import { normalizarRut } from '@/utilidades/rut';
 
 type FormularioUsuarioProps = {
   form: FormInstance<UsuarioPayload>;
-  areas: Area[];
-  loadingAreas?: boolean;
   modo: 'crear' | 'editar';
   onFinish: (values: UsuarioPayload) => void;
 };
 
 export function FormularioUsuario({
   form,
-  areas,
-  loadingAreas = false,
   modo,
   onFinish,
 }: FormularioUsuarioProps) {
@@ -107,12 +102,8 @@ export function FormularioUsuario({
       >
         <Select<RolUsuario> options={OPCIONES_ROL_USUARIO} />
       </Form.Item>
-      <Form.Item
-        label="Area"
-        name="areaId"
-        rules={[{ required: true, message: 'Seleccione un area' }]}
-      >
-        <Select loading={loadingAreas} options={mapearOpcionesAreas(areas)} />
+      <Form.Item name="areaId" hidden>
+        <Input type="hidden" />
       </Form.Item>
       <Form.Item label="Activo" name="activo" valuePropName="checked">
         <Switch />

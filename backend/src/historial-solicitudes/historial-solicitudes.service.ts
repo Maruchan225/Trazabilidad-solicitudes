@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
 import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
-import { USUARIO_PUBLICO_ARGS } from '../comun/usuario-seguro.util';
+import { SAFE_USER_ARGS } from '../comun/usuario-seguro.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -12,7 +12,7 @@ export class HistorialSolicitudesService {
     return this.prisma.historialSolicitud.findMany({
       include: {
         solicitud: true,
-        usuario: USUARIO_PUBLICO_ARGS,
+        usuario: SAFE_USER_ARGS,
         areaOrigen: true,
         areaDestino: true,
       },
@@ -30,16 +30,13 @@ export class HistorialSolicitudesService {
           ? {
               solicitud: {
                 eliminadoEn: null,
-                OR: [
-                  { asignadoAId: usuario.id },
-                  { areaActualId: usuario.areaId },
-                ],
+                asignadoAId: usuario.id,
               },
             }
           : {}),
       },
       include: {
-        usuario: USUARIO_PUBLICO_ARGS,
+        usuario: SAFE_USER_ARGS,
         areaOrigen: true,
         areaDestino: true,
       },

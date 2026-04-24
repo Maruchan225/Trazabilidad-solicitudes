@@ -8,18 +8,27 @@ import { reportesService } from '@/servicios/reportes/reportes.service';
 import type {
   CargaPorTrabajador,
   SolicitudVencidaReporte,
-  SolicitudesPorArea,
+  SolicitudesPorPrioridad,
   SolicitudesPorTipo,
 } from '@/tipos/reportes';
+import {
+  COLOR_SEMAFORO_AMARILLO,
+  COLOR_SEMAFORO_ROJO,
+  COLOR_SEMAFORO_VERDE,
+} from '@/utilidades/estadoVisual';
 import { formatearDias } from '@/utilidades/reportes';
 
 export function PaginaReportes() {
+  const resumen = useConsulta(
+    () => reportesService.obtenerResumenGeneral(),
+    [],
+  );
   const estados = useConsulta(
     () => reportesService.obtenerSolicitudesPorEstado(),
     [],
   );
-  const areas = useConsulta(
-    () => reportesService.obtenerSolicitudesPorArea(),
+  const prioridades = useConsulta(
+    () => reportesService.obtenerSolicitudesPorPrioridad(),
     [],
   );
   const carga = useConsulta(
@@ -37,13 +46,19 @@ export function PaginaReportes() {
 
   return (
     <PaginaModulo
-      titulo="Reportes"
-      descripcion="Informes detallados sobre el estado de las solicitudes en el sistema."
+      titulo="Reportes operativos"
+      descripcion="Vista analitica de DOM con foco en usuario, estado, prioridad, vencimiento y tipos de solicitud."
+      tarjetas={[
+        { titulo: 'En proceso', valor: resumen.data?.solicitudesEnProceso ?? 0 },
+        { titulo: 'Por vencer', valor: resumen.data?.solicitudesProximasAVencer ?? 0 },
+        { titulo: 'Vencidas', valor: resumen.data?.solicitudesVencidas ?? 0 },
+        { titulo: 'Cerradas', valor: resumen.data?.solicitudesCerradas ?? 0 },
+      ]}
     >
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={16}>
           <TarjetaTablaReporte<CargaPorTrabajador>
-            titulo="Carga por trabajador"
+            titulo="Carga por usuario"
             className="h-full rounded-3xl"
             consulta={carga}
             rowKey="trabajadorId"
@@ -51,20 +66,20 @@ export function PaginaReportes() {
             emptyDescription="No hay carga asignada."
             columns={[
               {
-                title: 'Trabajador',
+                title: 'Usuario',
                 dataIndex: 'nombreCompleto',
                 sorter: (a, b) =>
                   a.nombreCompleto.localeCompare(b.nombreCompleto),
               },
               {
-                title: 'Area',
-                dataIndex: 'area',
-                sorter: (a, b) => a.area.localeCompare(b.area),
-              },
-              {
                 title: 'Asignadas',
                 dataIndex: 'totalAsignadas',
                 sorter: (a, b) => a.totalAsignadas - b.totalAsignadas,
+              },
+              {
+                title: 'En proceso',
+                dataIndex: 'enProceso',
+                sorter: (a, b) => a.enProceso - b.enProceso,
               },
               {
                 title: 'Vencidas',
@@ -73,7 +88,7 @@ export function PaginaReportes() {
                 render: (valor: number) => (
                   <TagCantidad
                     valor={valor}
-                    color={valor > 0 ? '#ef4444' : '#10b981'}
+                    color={valor > 0 ? COLOR_SEMAFORO_ROJO : COLOR_SEMAFORO_VERDE}
                   />
                 ),
               },
@@ -108,30 +123,41 @@ export function PaginaReportes() {
           />
         </Col>
         <Col xs={24} xl={12}>
-          <TarjetaTablaReporte<SolicitudesPorArea>
-            titulo="Solicitudes por area"
+          <TarjetaTablaReporte<SolicitudesPorPrioridad>
+            titulo="Solicitudes por prioridad"
             className="h-full rounded-3xl"
-            consulta={areas}
-            rowKey="areaId"
+            consulta={prioridades}
+            rowKey="prioridad"
             pagination={false}
-            emptyDescription="No hay datos por area."
+            emptyDescription="No hay datos por prioridad."
             columns={[
               {
-                title: 'Area',
-                dataIndex: 'area',
-                sorter: (a, b) => a.area.localeCompare(b.area),
+                title: 'Prioridad',
+                dataIndex: 'prioridad',
               },
               {
                 title: 'Cantidad',
                 dataIndex: 'cantidad',
                 sorter: (a, b) => a.cantidad - b.cantidad,
+                render: (valor: number, record) => (
+                  <TagCantidad
+                    valor={valor}
+                    color={
+                      record.prioridad === 'BAJA'
+                        ? COLOR_SEMAFORO_VERDE
+                        : record.prioridad === 'MEDIA'
+                          ? COLOR_SEMAFORO_AMARILLO
+                          : COLOR_SEMAFORO_ROJO
+                    }
+                  />
+                ),
               },
             ]}
           />
         </Col>
         <Col xs={24} xl={12}>
           <TarjetaTablaReporte<SolicitudesPorTipo>
-            titulo="Solicitudes por tipo"
+            titulo="Tipos de solicitud mas frecuentes"
             className="h-full rounded-3xl"
             consulta={tipos}
             rowKey="tipoSolicitudId"
@@ -160,16 +186,16 @@ export function PaginaReportes() {
             pagination={{ pageSize: 6 }}
             emptyDescription="No hay solicitudes vencidas."
             columns={[
-              { title: 'ID', dataIndex: 'id', sorter: (a, b) => a.id - b.id },
+              {
+                title: 'Correlativo',
+                dataIndex: 'correlativo',
+                render: (correlativo: number | null | undefined) =>
+                  correlativo ?? '-',
+              },
               {
                 title: 'Titulo',
                 dataIndex: 'titulo',
                 sorter: (a, b) => a.titulo.localeCompare(b.titulo),
-              },
-              {
-                title: 'Area',
-                dataIndex: 'area',
-                sorter: (a, b) => a.area.localeCompare(b.area),
               },
               {
                 title: 'Tipo',
@@ -188,7 +214,7 @@ export function PaginaReportes() {
                 dataIndex: 'diasAtraso',
                 sorter: (a, b) => a.diasAtraso - b.diasAtraso,
                 render: (dias: number) => (
-                  <TagCantidad valor={formatearDias(dias)} color="#ef4444" />
+                  <TagCantidad valor={formatearDias(dias)} color={COLOR_SEMAFORO_ROJO} />
                 ),
               },
             ]}

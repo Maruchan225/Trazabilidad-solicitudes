@@ -1,11 +1,12 @@
 import { apiClient } from '@/servicios/api/client';
 import type {
   CargaPorTrabajador,
+  DashboardTrabajador,
   FiltrosReportes,
   ResumenGeneral,
   SolicitudVencidaReporte,
-  SolicitudesPorArea,
   SolicitudesPorEstado,
+  SolicitudesPorPrioridad,
   SolicitudesPorTipo,
   TiempoPromedioRespuesta,
 } from '@/tipos/reportes';
@@ -43,11 +44,6 @@ export const reportesService = {
       `/reportes/carga-por-trabajador${construirQuery(filtros)}`,
     );
   },
-  obtenerSolicitudesPorArea(filtros?: FiltrosReportes) {
-    return apiClient.get<SolicitudesPorArea[]>(
-      `/reportes/solicitudes-por-area${construirQuery(filtros)}`,
-    );
-  },
   obtenerTiempoPromedioRespuesta(filtros?: FiltrosReportes) {
     return apiClient.get<TiempoPromedioRespuesta>(
       `/reportes/tiempo-promedio-respuesta${construirQuery(filtros)}`,
@@ -62,5 +58,13 @@ export const reportesService = {
     return apiClient.get<SolicitudesPorTipo[]>(
       `/reportes/solicitudes-por-tipo${construirQuery(filtros)}`,
     );
+  },
+  obtenerSolicitudesPorPrioridad(filtros?: FiltrosReportes) {
+    return apiClient.get<SolicitudesPorPrioridad[]>(
+      `/reportes/solicitudes-por-prioridad${construirQuery(filtros)}`,
+    );
+  },
+  obtenerDashboardTrabajador() {
+    return apiClient.get<DashboardTrabajador>('/reportes/dashboard-trabajador');
   },
 };

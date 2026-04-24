@@ -1,10 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { compare, hash } from 'bcrypt';
 import { Prisma } from '@prisma/client';
-import { USUARIO_PUBLICO_CON_AREA_ARGS } from '../comun/usuario-seguro.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { handlePrismaError } from '../comun/prisma-error.util';
-import { normalizarRut } from '../comun/rut.util';
+import { normalizeRut } from '../comun/rut.util';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { FiltroUsuariosDto } from './dto/filtro-usuarios.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
@@ -13,34 +12,35 @@ import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 export class UsuariosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private mapearUsuarioConTotales<
+  private mapUserWithTotals<
     T extends {
       _count?: {
         solicitudesAsignadas?: number;
       };
     },
-  >(usuario: T) {
-    const { _count, ...resto } = usuario;
+  >(user: T) {
+    const { _count, ...rest } = user;
 
     return {
-      ...resto,
+      ...rest,
       totalSolicitudes: _count?.solicitudesAsignadas ?? 0,
     };
   }
 
   async crear(createUsuarioDto: CreateUsuarioDto) {
-    await this.asegurarExistenciaArea(createUsuarioDto.areaId);
+    const areaId = await this.resolveTechnicalAreaId(createUsuarioDto.areaId);
 
     try {
-      const contrasenaHasheada = await this.hashContrasena(
+      const hashedPassword = await this.hashPassword(
         createUsuarioDto.contrasena,
       );
 
-      const usuario = await this.prisma.usuario.create({
+      const user = await this.prisma.usuario.create({
         data: {
           ...createUsuarioDto,
-          rut: normalizarRut(createUsuarioDto.rut) ?? createUsuarioDto.rut,
-          contrasena: contrasenaHasheada,
+          areaId,
+          rut: normalizeRut(createUsuarioDto.rut) ?? createUsuarioDto.rut,
+          contrasena: hashedPassword,
         },
         include: {
           area: true,
@@ -55,15 +55,15 @@ export class UsuariosService {
         },
       });
 
-      return this.mapearUsuarioConTotales(usuario);
+      return this.mapUserWithTotals(user);
     } catch (error) {
       handlePrismaError(error, 'usuario');
     }
   }
 
   async listar(filtros: FiltroUsuariosDto) {
-    const where = this.construirWhere(filtros);
-    const usuarios = await this.prisma.usuario.findMany({
+    const where = this.buildWhereFilter(filtros);
+    const users = await this.prisma.usuario.findMany({
       where,
       omit: {
         contrasena: true,
@@ -81,7 +81,7 @@ export class UsuariosService {
       ...(typeof filtros.limite === 'number' ? { take: filtros.limite } : {}),
     });
 
-    return usuarios.map((usuario) => this.mapearUsuarioConTotales(usuario));
+    return users.map((user) => this.mapUserWithTotals(user));
   }
 
   async obtenerPorId(id: number) {
@@ -104,14 +104,14 @@ export class UsuariosService {
       throw new NotFoundException(`Usuario con id ${id} no encontrado`);
     }
 
-    return this.mapearUsuarioConTotales(user);
+    return this.mapUserWithTotals(user);
   }
 
   async actualizar(id: number, updateUsuarioDto: UpdateUsuarioDto) {
     await this.obtenerPorId(id);
 
     if (updateUsuarioDto.areaId) {
-      await this.asegurarExistenciaArea(updateUsuarioDto.areaId);
+      await this.ensureAreaExists(updateUsuarioDto.areaId);
     }
 
     try {
@@ -120,21 +120,21 @@ export class UsuariosService {
             ...updateUsuarioDto,
             ...(updateUsuarioDto.rut
               ? {
-                  rut: normalizarRut(updateUsuarioDto.rut) ?? updateUsuarioDto.rut,
+                  rut: normalizeRut(updateUsuarioDto.rut) ?? updateUsuarioDto.rut,
                 }
               : {}),
-            contrasena: await this.hashContrasena(updateUsuarioDto.contrasena),
+            contrasena: await this.hashPassword(updateUsuarioDto.contrasena),
           }
         : {
             ...updateUsuarioDto,
             ...(updateUsuarioDto.rut
               ? {
-                  rut: normalizarRut(updateUsuarioDto.rut) ?? updateUsuarioDto.rut,
+                  rut: normalizeRut(updateUsuarioDto.rut) ?? updateUsuarioDto.rut,
                 }
               : {}),
           };
 
-      const usuario = await this.prisma.usuario.update({
+      const user = await this.prisma.usuario.update({
         where: { id },
         data,
         include: {
@@ -150,7 +150,7 @@ export class UsuariosService {
         },
       });
 
-      return this.mapearUsuarioConTotales(usuario);
+      return this.mapUserWithTotals(user);
     } catch (error) {
       handlePrismaError(error, 'usuario');
     }
@@ -160,7 +160,7 @@ export class UsuariosService {
     await this.obtenerPorId(id);
 
     try {
-      const usuario = await this.prisma.usuario.delete({
+      const user = await this.prisma.usuario.delete({
         where: { id },
         include: {
           area: true,
@@ -175,7 +175,7 @@ export class UsuariosService {
         },
       });
 
-      return this.mapearUsuarioConTotales(usuario);
+      return this.mapUserWithTotals(user);
     } catch (error) {
       handlePrismaError(error, 'usuario');
     }
@@ -214,11 +214,11 @@ export class UsuariosService {
     return compare(contrasenaPlano, contrasenaHash);
   }
 
-  private hashContrasena(contrasena: string): Promise<string> {
-    return hash(contrasena, 10);
+  private hashPassword(password: string): Promise<string> {
+    return hash(password, 10);
   }
 
-  private async asegurarExistenciaArea(areaId: number) {
+  private async ensureAreaExists(areaId: number) {
     const area = await this.prisma.area.findUnique({
       where: { id: areaId },
     });
@@ -228,19 +228,39 @@ export class UsuariosService {
     }
   }
 
-  private construirWhere(filtros: FiltroUsuariosDto): Prisma.UsuarioWhereInput {
-    const busqueda = filtros.busqueda?.trim();
-    const rutNormalizado = normalizarRut(busqueda);
-    const filtroRut: Prisma.UsuarioWhereInput | undefined = busqueda
+  private async resolveTechnicalAreaId(areaId?: number) {
+    if (typeof areaId === 'number') {
+      await this.ensureAreaExists(areaId);
+      return areaId;
+    }
+
+    const technicalArea = await this.prisma.area.findFirst({
+      where: { activo: true },
+      orderBy: [{ nombre: 'asc' }],
+    });
+
+    if (!technicalArea) {
+      throw new NotFoundException(
+        'No existe un area tecnica configurada para esta instancia DOM',
+      );
+    }
+
+    return technicalArea.id;
+  }
+
+  private buildWhereFilter(filtros: FiltroUsuariosDto): Prisma.UsuarioWhereInput {
+    const search = filtros.busqueda?.trim();
+    const normalizedRut = normalizeRut(search);
+    const rutFilter: Prisma.UsuarioWhereInput | undefined = search
       ? {
           rut: {
-            contains: rutNormalizado ?? busqueda,
+            contains: normalizedRut ?? search,
             mode: Prisma.QueryMode.insensitive,
           },
         }
       : undefined;
-    const rolesCoincidentes = ['ENCARGADO', 'REEMPLAZO', 'TRABAJADOR'].filter(
-      (rol) => rol.toLowerCase().includes(busqueda?.toLowerCase() ?? ''),
+    const matchingRoles = ['ENCARGADO', 'REEMPLAZO', 'TRABAJADOR'].filter(
+      (role) => role.toLowerCase().includes(search?.toLowerCase() ?? ''),
     );
 
     return {
@@ -249,19 +269,19 @@ export class UsuariosService {
       ...(typeof filtros.activo === 'boolean'
         ? { activo: filtros.activo }
         : {}),
-      ...(busqueda
+      ...(search
         ? {
             OR: [
-              { nombres: { contains: busqueda, mode: 'insensitive' } },
-              { apellidos: { contains: busqueda, mode: 'insensitive' } },
-              { email: { contains: busqueda, mode: 'insensitive' } },
-              ...(filtroRut ? [filtroRut] : []),
-              ...(rolesCoincidentes.length > 0
-                ? [{ rol: { in: rolesCoincidentes as never[] } }]
+              { nombres: { contains: search, mode: 'insensitive' } },
+              { apellidos: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
+              ...(rutFilter ? [rutFilter] : []),
+              ...(matchingRoles.length > 0
+                ? [{ rol: { in: matchingRoles as never[] } }]
                 : []),
               {
                 area: {
-                  nombre: { contains: busqueda, mode: 'insensitive' },
+                  nombre: { contains: search, mode: 'insensitive' },
                 },
               },
             ],

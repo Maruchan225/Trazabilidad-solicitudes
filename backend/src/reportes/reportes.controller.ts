@@ -1,6 +1,8 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
 import { Roles } from '../autenticacion/decoradores/roles.decorator';
+import { UsuarioAutenticado } from '../autenticacion/decoradores/usuario-autenticado.decorator';
+import type { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { FiltroReportesDto } from './dto/filtro-reportes.dto';
 import { ReportesService } from './reportes.service';
 
@@ -17,11 +19,6 @@ export class ReportesController {
   @Get('solicitudes-por-estado')
   obtenerSolicitudesPorEstado(@Query() filtros: FiltroReportesDto) {
     return this.reportesService.obtenerSolicitudesPorEstado(filtros);
-  }
-
-  @Get('solicitudes-por-area')
-  obtenerSolicitudesPorArea(@Query() filtros: FiltroReportesDto) {
-    return this.reportesService.obtenerSolicitudesPorArea(filtros);
   }
 
   @Get('carga-por-trabajador')
@@ -42,5 +39,16 @@ export class ReportesController {
   @Get('solicitudes-por-tipo')
   obtenerSolicitudesPorTipo(@Query() filtros: FiltroReportesDto) {
     return this.reportesService.obtenerSolicitudesPorTipo(filtros);
+  }
+
+  @Get('solicitudes-por-prioridad')
+  obtenerSolicitudesPorPrioridad(@Query() filtros: FiltroReportesDto) {
+    return this.reportesService.obtenerSolicitudesPorPrioridad(filtros);
+  }
+
+  @Get('dashboard-trabajador')
+  @Roles(RolUsuario.TRABAJADOR)
+  obtenerDashboardTrabajador(@UsuarioAutenticado() usuario: UsuarioToken) {
+    return this.reportesService.obtenerDashboardTrabajador(usuario);
   }
 }

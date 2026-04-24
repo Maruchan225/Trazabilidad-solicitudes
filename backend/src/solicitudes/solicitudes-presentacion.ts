@@ -6,17 +6,17 @@ export type SolicitudPresentable = {
   fechaCierre: Date | null;
 };
 
-export function estaSolicitudVencida(solicitud: SolicitudPresentable) {
-  return !solicitud.fechaCierre && solicitud.fechaVencimiento.getTime() < Date.now();
+export function isRequestOverdue(request: SolicitudPresentable) {
+  return !request.fechaCierre && request.fechaVencimiento.getTime() < Date.now();
 }
 
-export function presentarSolicitud<T extends SolicitudPresentable>(solicitud: T) {
-  const estaVencida = estaSolicitudVencida(solicitud);
+export function presentRequest<T extends SolicitudPresentable>(request: T) {
+  const isOverdue = isRequestOverdue(request);
 
   return {
-    ...solicitud,
-    estadoPersistido: solicitud.estado,
-    estadoActual: estaVencida ? EstadoSolicitud.VENCIDA : solicitud.estado,
-    estaVencida,
+    ...request,
+    estadoPersistido: request.estado,
+    estadoActual: isOverdue ? EstadoSolicitud.VENCIDA : request.estado,
+    estaVencida: isOverdue,
   };
 }

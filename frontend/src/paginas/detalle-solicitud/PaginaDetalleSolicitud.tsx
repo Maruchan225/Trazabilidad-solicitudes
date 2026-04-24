@@ -1,5 +1,6 @@
 import {
   App,
+  Alert,
   Button,
   Card,
   Col,
@@ -10,7 +11,6 @@ import {
   Popconfirm,
   Row,
   Space,
-  Tag,
   Typography,
   Upload,
 } from 'antd';
@@ -26,16 +26,22 @@ import { Icono } from '@/componentes/ui/Icono';
 import { EstadoConsulta } from '@/componentes/ui/EstadoConsulta';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
 import { TagEstadoSolicitud } from '@/componentes/ui/tags/TagEstadoSolicitud';
+import { TagPrioridad } from '@/componentes/ui/tags/TagPrioridad';
+import { TagVencimientoSolicitud } from '@/componentes/ui/tags/TagVencimientoSolicitud';
 import { useAutenticacion } from '@/ganchos/useAutenticacion';
 import { useConsulta } from '@/ganchos/useConsulta';
 import { useMutacion } from '@/ganchos/useMutacion';
-import { areasService } from '@/servicios/areas/areas.service';
 import { solicitudesService } from '@/servicios/solicitudes/solicitudes.service';
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
 import type { HistorialSolicitud } from '@/tipos/solicitudes';
 import { obtenerMensajeError } from '@/utilidades/crud';
 import { formatearFecha, formatearFechaHora } from '@/utilidades/fechas';
 import { esRolTrabajador, puedeGestionarSolicitudes } from '@/utilidades/permisos';
+import { formatearEstado } from '@/utilidades/reportes';
+import {
+  calcularDiasHastaVencimiento,
+  obtenerEtiquetaVencimiento,
+} from '@/utilidades/solicitudesOperativas';
 
 const EXTENSIONES_ADJUNTOS_PERMITIDAS = [
   '.pdf',
@@ -50,7 +56,9 @@ const TAMANO_MAXIMO_ADJUNTO_BYTES = 10 * 1024 * 1024;
 function obtenerNombreCompleto(
   usuario?: { nombres: string; apellidos: string } | null,
 ) {
-  return usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Sin asignacion';
+  return usuario
+    ? `${usuario.nombres} ${usuario.apellidos}`
+    : 'Sin responsable asignado (registro heredado)';
 }
 
 function describirEntradaHistorial(item: HistorialSolicitud) {
@@ -64,15 +72,14 @@ function describirEntradaHistorial(item: HistorialSolicitud) {
   }
 
   if (item.accion === 'DERIVADA') {
-    const areaOrigen = item.areaOrigen?.nombre ?? 'Sin area';
-    const areaDestino = item.areaDestino?.nombre ?? 'Sin area';
+    const origen = obtenerNombreCompleto(item.asignadoOrigen);
     const destino = obtenerNombreCompleto(item.asignadoDestino);
 
-    return `${actor} derivo la solicitud desde ${areaOrigen} a ${areaDestino} y la dejo a cargo de ${destino}.`;
+    return `${actor} derivo la solicitud desde ${origen} a ${destino}.`;
   }
 
   if (item.accion === 'ESTADO_CAMBIADO' && item.estadoOrigen && item.estadoDestino) {
-    return `${actor} cambio el estado de ${item.estadoOrigen} a ${item.estadoDestino}.`;
+    return `${actor} cambio el estado de ${formatearEstado(item.estadoOrigen)} a ${formatearEstado(item.estadoDestino)}.`;
   }
 
   if (item.accion === 'CREADA') {
@@ -141,35 +148,49 @@ export function PaginaDetalleSolicitud() {
     () => solicitudesService.listarAdjuntos(solicitudId),
     [solicitudId],
   );
-  const areas = useConsulta(() => areasService.listar(), []);
   const usuarios = useConsulta(() => usuariosService.listar(), []);
   const [form] = Form.useForm<FormularioAccionSolicitudValores>();
   const [accionActiva, setAccionActiva] = useState<AccionSolicitud | null>(null);
   const { loading: guardando, ejecutar } = useMutacion();
   const { loading: subiendo, ejecutar: ejecutarAdjunto } = useMutacion();
-  const areaDestinoSeleccionada = Form.useWatch('areaDestinoId', form);
 
   const puedeGestionar = puedeGestionarSolicitudes(sesion?.usuario.rol);
   const esTrabajador = esRolTrabajador(sesion?.usuario.rol);
   const trabajadoresArea = (usuarios.data ?? []).filter(
     (usuario) =>
       usuario.rol === 'TRABAJADOR' &&
-      usuario.activo &&
-      usuario.area.id === consulta.data?.areaActual.id,
+      usuario.activo,
   );
-  const trabajadoresAreaDestino = (usuarios.data ?? []).filter(
+  const trabajadoresDerivables = (usuarios.data ?? []).filter(
     (usuario) =>
       usuario.rol === 'TRABAJADOR' &&
       usuario.activo &&
-      usuario.area.id === areaDestinoSeleccionada,
-  );
-  const areasDerivables = (areas.data ?? []).filter(
-    (area) => area.activo && area.id !== consulta.data?.areaActual.id,
+      usuario.id !== consulta.data?.asignadoA?.id,
   );
   const historialCompleto = [...(consulta.data?.historialEntradas ?? [])].reverse();
   const trabajadorPuedeCambiarEstado =
     consulta.data?.estadoPersistido !== 'FINALIZADA' &&
     consulta.data?.estadoPersistido !== 'CERRADA';
+  const diasVencimiento = calcularDiasHastaVencimiento(
+    consulta.data?.fechaVencimiento,
+    consulta.data?.fechaCierre,
+  );
+  const etiquetaVencimiento = obtenerEtiquetaVencimiento(
+    consulta.data?.fechaVencimiento,
+    consulta.data?.fechaCierre,
+    consulta.data?.estaVencida,
+  );
+  const accionGestionPrincipal =
+    !consulta.data?.asignadoA
+      ? 'asignar'
+      : consulta.data?.estadoPersistido === 'FINALIZADA'
+        ? 'cerrar'
+        : 'derivar';
+  const accionTrabajadorPrincipal =
+    consulta.data?.estadoPersistido === 'EN_PROCESO' ||
+    consulta.data?.estadoPersistido === 'PENDIENTE_INFORMACION'
+      ? 'finalizar'
+      : 'estado';
 
   function abrirAccion(accion: AccionSolicitud) {
     form.resetFields();
@@ -189,9 +210,8 @@ export function PaginaDetalleSolicitud() {
         });
       }
 
-      if (accionActiva === 'derivar' && values.areaDestinoId && values.asignadoAId) {
+      if (accionActiva === 'derivar' && values.asignadoAId) {
         return solicitudesService.derivar(solicitudId, {
-          areaDestinoId: values.areaDestinoId,
           asignadoAId: values.asignadoAId,
           comentario: values.comentario,
         });
@@ -325,8 +345,8 @@ export function PaginaDetalleSolicitud() {
 
   return (
     <PaginaModulo
-      titulo={`Detalle de Solicitud #${id ?? ''}`}
-      descripcion=""
+      titulo={`Solicitud #${consulta.data?.correlativo ?? '-'}`}
+      descripcion="Detalle operativo con foco en estado, responsable, vencimiento, prioridad y trazabilidad."
     >
       <Space direction="vertical" size={16} className="w-full">
         <Button
@@ -344,27 +364,65 @@ export function PaginaDetalleSolicitud() {
           empty={!consulta.data}
           emptyDescription="No fue posible cargar la solicitud."
         >
+          {consulta.data?.estaVencida ? (
+            <Alert
+              type="error"
+              showIcon
+              message={`Solicitud vencida. ${etiquetaVencimiento}.`}
+            />
+          ) : typeof diasVencimiento === 'number' && diasVencimiento >= 0 && diasVencimiento <= 3 ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={`Solicitud por vencer. ${etiquetaVencimiento}.`}
+            />
+          ) : (
+            <Alert
+              type="success"
+              showIcon
+              message={`Solicitud en seguimiento normal. ${etiquetaVencimiento}.`}
+            />
+          )}
+
           <Row gutter={[16, 16]}>
             <Col xs={24} xl={15}>
               <Card
                 className="rounded-3xl"
-                title="Informacion principal"
+                title="Resumen operativo"
                 extra={
                   <Space wrap>
                     {puedeGestionar ? (
                       <>
-                        <Button onClick={() => abrirAccion('asignar')}>Asignar</Button>
-                        <Button onClick={() => abrirAccion('derivar')}>Derivar</Button>
+                        <Button
+                          type={accionGestionPrincipal === 'asignar' ? 'primary' : 'default'}
+                          onClick={() => abrirAccion('asignar')}
+                        >
+                          Asignar responsable
+                        </Button>
+                        <Button
+                          type={accionGestionPrincipal === 'derivar' ? 'primary' : 'default'}
+                          onClick={() => abrirAccion('derivar')}
+                        >
+                          Derivar a usuario
+                        </Button>
                         <Button onClick={() => abrirAccion('estado')}>
                           Cambiar estado
                         </Button>
-                        <Button onClick={() => abrirAccion('cerrar')}>Cerrar</Button>
+                        <Button
+                          type={accionGestionPrincipal === 'cerrar' ? 'primary' : 'default'}
+                          onClick={() => abrirAccion('cerrar')}
+                        >
+                          Cerrar solicitud
+                        </Button>
                       </>
                     ) : null}
                     {esTrabajador ? (
                       <>
                         {trabajadorPuedeCambiarEstado ? (
-                          <Button onClick={() => abrirAccion('estado')}>
+                          <Button
+                            type={accionTrabajadorPrincipal === 'estado' ? 'primary' : 'default'}
+                            onClick={() => abrirAccion('estado')}
+                          >
                             Cambiar estado
                           </Button>
                         ) : null}
@@ -372,7 +430,10 @@ export function PaginaDetalleSolicitud() {
                           Observacion
                         </Button>
                         {trabajadorPuedeCambiarEstado ? (
-                          <Button onClick={() => abrirAccion('finalizar')}>
+                          <Button
+                            type={accionTrabajadorPrincipal === 'finalizar' ? 'primary' : 'default'}
+                            onClick={() => abrirAccion('finalizar')}
+                          >
                             Finalizar
                           </Button>
                         ) : null}
@@ -382,19 +443,51 @@ export function PaginaDetalleSolicitud() {
                 }
               >
                 <Descriptions column={1} size="middle">
+                  <Descriptions.Item label="Correlativo">
+                    {consulta.data?.correlativo ?? '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="ID tecnico interno">
+                    {consulta.data?.id}
+                  </Descriptions.Item>
+                  {consulta.data?.numeroSolicitud ? (
+                    <Descriptions.Item label="Referencia externa">
+                      {consulta.data.numeroSolicitud}
+                    </Descriptions.Item>
+                  ) : null}
+                  <Descriptions.Item label="Prioridad">
+                    {consulta.data?.prioridad ? (
+                      <TagPrioridad prioridad={consulta.data.prioridad} />
+                    ) : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Responsable actual">
+                    {consulta.data?.asignadoA
+                      ? `${consulta.data.asignadoA.nombres} ${consulta.data.asignadoA.apellidos}`
+                      : 'Sin responsable asignado (registro heredado)'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Canal de ingreso">
+                    {consulta.data?.canalIngreso === 'PRESENCIAL'
+                      ? 'Presencial'
+                      : consulta.data?.canalIngreso === 'CORREO'
+                        ? 'Correo'
+                        : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Tipo de solicitud">
+                    {consulta.data?.tipoSolicitud.nombre}
+                  </Descriptions.Item>
                   <Descriptions.Item label="Titulo">
                     {consulta.data?.titulo}
                   </Descriptions.Item>
                   <Descriptions.Item label="Estado">
-                    <Space>
+                    <Space wrap>
                       <TagEstadoSolicitud
                         estado={consulta.data?.estadoActual ?? 'INGRESADA'}
                         estaVencida={consulta.data?.estaVencida}
                       />
-                      {consulta.data?.estaVencida &&
-                      consulta.data?.estadoActual !== 'VENCIDA' ? (
-                        <Tag color="#111827">Vencida</Tag>
-                      ) : null}
+                      <TagVencimientoSolicitud
+                        fechaVencimiento={consulta.data?.fechaVencimiento}
+                        fechaCierre={consulta.data?.fechaCierre}
+                        estaVencida={consulta.data?.estaVencida}
+                      />
                     </Space>
                   </Descriptions.Item>
                   <Descriptions.Item label="Fecha de creacion">
@@ -404,23 +497,19 @@ export function PaginaDetalleSolicitud() {
                     {formatearFechaHora(consulta.data?.actualizadoEn)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Fecha de vencimiento">
-                    {formatearFecha(consulta.data?.fechaVencimiento)}
+                    <Space>
+                      <span>{formatearFecha(consulta.data?.fechaVencimiento)}</span>
+                      <TagVencimientoSolicitud
+                        fechaVencimiento={consulta.data?.fechaVencimiento}
+                        fechaCierre={consulta.data?.fechaCierre}
+                        estaVencida={consulta.data?.estaVencida}
+                      />
+                    </Space>
                   </Descriptions.Item>
                   <Descriptions.Item label="Fecha de cierre">
                     {consulta.data?.fechaCierre
                       ? formatearFechaHora(consulta.data.fechaCierre)
                       : 'Pendiente'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Area actual">
-                    {consulta.data?.areaActual.nombre}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Tipo de solicitud">
-                    {consulta.data?.tipoSolicitud.nombre}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Asignado a">
-                    {consulta.data?.asignadoA
-                      ? `${consulta.data.asignadoA.nombres} ${consulta.data.asignadoA.apellidos}`
-                      : 'Sin asignacion'}
                   </Descriptions.Item>
                 </Descriptions>
               </Card>
@@ -518,7 +607,7 @@ export function PaginaDetalleSolicitud() {
                     />
                   </EstadoConsulta>
                 </Card>
-                <Card className="rounded-3xl" title="Historial">
+                <Card className="rounded-3xl" title="Historial operativo">
                   <Space
                     direction="vertical"
                     className="max-h-[520px] w-full overflow-y-auto pr-1"
@@ -559,11 +648,8 @@ export function PaginaDetalleSolicitud() {
         <FormularioAccionSolicitud
           accionActiva={accionActiva}
           form={form}
-          areasDisponibles={areasDerivables}
           trabajadoresArea={trabajadoresArea}
-          trabajadoresAreaDestino={trabajadoresAreaDestino}
-          areaDestinoSeleccionada={areaDestinoSeleccionada}
-          loadingAreas={areas.loading}
+          trabajadoresDerivables={trabajadoresDerivables}
           loadingUsuarios={usuarios.loading}
           esGestion={puedeGestionar}
           onFinish={(values) => void ejecutarAccion(values)}

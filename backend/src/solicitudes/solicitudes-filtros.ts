@@ -5,20 +5,19 @@ export const ACTIVE_REQUEST_WHERE = {
   eliminadoEn: null,
 } satisfies Prisma.SolicitudWhereInput;
 
-export function construirFiltroConsultaSolicitudes(
-  filtros: FiltroSolicitudesDto,
+export function buildRequestsQueryFilter(
+  filters: FiltroSolicitudesDto,
 ): Prisma.SolicitudWhereInput {
-  const busqueda = filtros.busqueda?.trim();
-  const filtraVencidas = filtros.estado === EstadoSolicitud.VENCIDA;
+  const search = filters.busqueda?.trim();
+  const filtersOverdue = filters.estado === EstadoSolicitud.VENCIDA;
 
   return {
-    ...(filtros.estado && !filtraVencidas ? { estado: filtros.estado } : {}),
-    ...(filtros.prioridad ? { prioridad: filtros.prioridad } : {}),
-    ...(filtros.areaId ? { areaActualId: filtros.areaId } : {}),
-    ...(filtros.tipoSolicitudId
-      ? { tipoSolicitudId: filtros.tipoSolicitudId }
+    ...(filters.estado && !filtersOverdue ? { estado: filters.estado } : {}),
+    ...(filters.prioridad ? { prioridad: filters.prioridad } : {}),
+    ...(filters.tipoSolicitudId
+      ? { tipoSolicitudId: filters.tipoSolicitudId }
       : {}),
-    ...(filtraVencidas
+    ...(filtersOverdue
       ? {
           fechaCierre: null,
           fechaVencimiento: {
@@ -26,31 +25,27 @@ export function construirFiltroConsultaSolicitudes(
           },
         }
       : {}),
-    ...(busqueda
+    ...(search
       ? {
           OR: [
-            { titulo: { contains: busqueda, mode: 'insensitive' } },
-            { descripcion: { contains: busqueda, mode: 'insensitive' } },
-            {
-              areaActual: {
-                nombre: { contains: busqueda, mode: 'insensitive' },
-              },
-            },
+            { numeroSolicitud: { contains: search, mode: 'insensitive' } },
+            { titulo: { contains: search, mode: 'insensitive' } },
+            { descripcion: { contains: search, mode: 'insensitive' } },
             {
               tipoSolicitud: {
-                nombre: { contains: busqueda, mode: 'insensitive' },
+                nombre: { contains: search, mode: 'insensitive' },
               },
             },
             {
               asignadoA: {
                 OR: [
-                  { nombres: { contains: busqueda, mode: 'insensitive' } },
-                  { apellidos: { contains: busqueda, mode: 'insensitive' } },
+                  { nombres: { contains: search, mode: 'insensitive' } },
+                  { apellidos: { contains: search, mode: 'insensitive' } },
                 ],
               },
             },
-            ...(Number.isInteger(Number(busqueda))
-              ? [{ id: Number(busqueda) }]
+            ...(Number.isInteger(Number(search))
+              ? [{ id: Number(search) }, { correlativo: Number(search) }]
               : []),
           ],
         }
@@ -58,20 +53,20 @@ export function construirFiltroConsultaSolicitudes(
   };
 }
 
-export function combinarFiltrosSolicitud(
-  ...filtros: Prisma.SolicitudWhereInput[]
+export function combineRequestFilters(
+  ...filters: Prisma.SolicitudWhereInput[]
 ): Prisma.SolicitudWhereInput {
-  const filtrosActivos = filtros.filter((filtro) => Object.keys(filtro).length);
+  const activeFilters = filters.filter((filter) => Object.keys(filter).length);
 
-  if (filtrosActivos.length === 0) {
+  if (activeFilters.length === 0) {
     return {};
   }
 
-  if (filtrosActivos.length === 1) {
-    return filtrosActivos[0];
+  if (activeFilters.length === 1) {
+    return activeFilters[0];
   }
 
   return {
-    AND: filtrosActivos,
+    AND: activeFilters,
   };
 }

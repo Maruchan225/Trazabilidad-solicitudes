@@ -3,11 +3,6 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { LayoutPrincipal } from '@/disenos/LayoutPrincipal';
 import { RutaPrivada } from '@/rutas/RutaPrivada';
 
-const PaginaAreas = lazy(() =>
-  import('@/paginas/areas/PaginaAreas').then((module) => ({
-    default: module.PaginaAreas,
-  })),
-);
 const PaginaDashboard = lazy(() =>
   import('@/paginas/dashboard/PaginaDashboard').then((module) => ({
     default: module.PaginaDashboard,
@@ -91,10 +86,6 @@ export const router = createBrowserRouter([
       {
         path: 'solicitudes/:id',
         element: renderLazy(PaginaDetalleSolicitud),
-      },
-      {
-        path: 'areas',
-        element: renderLazy(PaginaAreas),
       },
       {
         path: 'usuarios',

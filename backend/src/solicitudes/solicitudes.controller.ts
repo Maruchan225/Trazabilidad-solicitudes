@@ -74,7 +74,7 @@ export class SolicitudesController {
     @Body() derivarSolicitudDto: DerivarSolicitudDto,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.solicitudesService.derivarSolicitudAArea(
+    return this.solicitudesService.derivarSolicitudAUsuario(
       id,
       derivarSolicitudDto,
       usuario,

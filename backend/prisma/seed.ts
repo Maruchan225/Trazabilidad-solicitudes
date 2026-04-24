@@ -1,6 +1,7 @@
 import * as bcrypt from 'bcrypt';
 import {
   AccionHistorialSolicitud,
+  CanalIngreso,
   EstadoSolicitud,
   PrismaClient,
   PrioridadSolicitud,
@@ -302,6 +303,8 @@ async function main() {
 
   const solicitudIngresada = await prisma.solicitud.create({
     data: {
+      correlativo: 1,
+      canalIngreso: CanalIngreso.PRESENCIAL,
       titulo: 'Ingreso de antecedentes para actividad vecinal',
       descripcion:
         'La junta de vecinos solicita registrar antecedentes y respaldos para actividad comunitaria del fin de semana.',
@@ -325,6 +328,8 @@ async function main() {
 
   const solicitudDerivada = await prisma.solicitud.create({
     data: {
+      correlativo: 2,
+      canalIngreso: CanalIngreso.CORREO,
       titulo: 'Consulta sobre instalacion de reductor de velocidad',
       descripcion:
         'Vecinos del pasaje Los Tilos solicitan evaluar medidas de seguridad vial frente a la sede vecinal.',
@@ -359,6 +364,8 @@ async function main() {
 
   const solicitudEnProceso = await prisma.solicitud.create({
     data: {
+      correlativo: 3,
+      canalIngreso: CanalIngreso.PRESENCIAL,
       titulo: 'Revision de permiso provisorio para feria barrial',
       descripcion:
         'Se requiere revisar antecedentes y autorizaciones para feria barrial de fin de mes.',
@@ -400,6 +407,8 @@ async function main() {
 
   const solicitudPendiente = await prisma.solicitud.create({
     data: {
+      correlativo: 4,
+      canalIngreso: CanalIngreso.CORREO,
       titulo: 'Reclamo por retiro incompleto de residuos voluminosos',
       descripcion:
         'Se solicita complementar retiro de residuos en sector Villa Esperanza y confirmar fecha de nueva visita.',
@@ -452,6 +461,8 @@ async function main() {
 
   const solicitudFinalizada = await prisma.solicitud.create({
     data: {
+      correlativo: 5,
+      canalIngreso: CanalIngreso.PRESENCIAL,
       titulo: 'Emision de certificado de residencia para programa social',
       descripcion:
         'Se requiere certificado simple de residencia para presentacion en programa de apoyo familiar.',
@@ -503,6 +514,8 @@ async function main() {
   const fechaCierre = diasDesdeHoy(-1);
   const solicitudCerrada = await prisma.solicitud.create({
     data: {
+      correlativo: 6,
+      canalIngreso: CanalIngreso.CORREO,
       titulo: 'Pago pendiente a proveedor de suministro de oficina',
       descripcion:
         'Regularizacion de pago por compra de resmas y carpetas administrativas del mes anterior.',
@@ -563,6 +576,8 @@ async function main() {
 
   const solicitudVencida = await prisma.solicitud.create({
     data: {
+      correlativo: 7,
+      canalIngreso: CanalIngreso.PRESENCIAL,
       titulo: 'Analisis juridico de ocupacion de bien nacional de uso publico',
       descripcion:
         'Se requiere pronunciamiento sobre ocupacion reiterada de vereda por local comercial del sector centro.',

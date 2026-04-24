@@ -14,12 +14,6 @@ export class FiltroReportesDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  areaId?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
   trabajadorId?: number;
 
   @IsOptional()

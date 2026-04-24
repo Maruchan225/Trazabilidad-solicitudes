@@ -9,37 +9,37 @@ const {
   RolUsuario,
 } = require('@prisma/client');
 const {
-  combinarFiltrosSolicitud,
-  construirFiltroConsultaSolicitudes,
+  buildRequestsQueryFilter,
+  combineRequestFilters,
 } = require('../dist/src/solicitudes/solicitudes-filtros.js');
 const {
-  obtenerAccionHistorialCambioEstado,
-  validarCambioEstadoPermitido,
-  validarSolicitudCerrable,
-  validarSolicitudFinalizable,
-  validarTrabajadorPuedeOperarSolicitud,
+  getHistoryActionForStatusChange,
+  validateRequestClosable,
+  validateRequestFinalizable,
+  validateStatusChangeAllowed,
+  validateWorkerCanOperateRequest,
+  validateWorkerCanViewRequest,
 } = require('../dist/src/solicitudes/solicitudes-flujo.js');
 const {
-  estaSolicitudVencida,
-  presentarSolicitud,
+  isRequestOverdue,
+  presentRequest,
 } = require('../dist/src/solicitudes/solicitudes-presentacion.js');
 
-test('construirFiltroConsultaSolicitudes arma busqueda numerica y vencidas', () => {
-  const filtro = construirFiltroConsultaSolicitudes({
+test('buildRequestsQueryFilter arma busqueda numerica y vencidas', () => {
+  const filtro = buildRequestsQueryFilter({
     busqueda: '42',
     estado: EstadoSolicitud.VENCIDA,
     prioridad: PrioridadSolicitud.ALTA,
-    areaId: 7,
   });
 
   assert.equal(filtro.prioridad, PrioridadSolicitud.ALTA);
-  assert.equal(filtro.areaActualId, 7);
   assert.equal(filtro.fechaCierre, null);
-  assert.equal(filtro.OR.at(-1).id, 42);
+  assert.ok(filtro.OR.some((item) => item.id === 42));
+  assert.ok(filtro.OR.some((item) => item.correlativo === 42));
 });
 
-test('combinarFiltrosSolicitud ignora objetos vacios y conserva AND cuando aplica', () => {
-  const combinado = combinarFiltrosSolicitud(
+test('combineRequestFilters ignora objetos vacios y conserva AND cuando aplica', () => {
+  const combinado = combineRequestFilters(
     {},
     { eliminadoEn: null },
     { prioridad: PrioridadSolicitud.MEDIA },
@@ -50,10 +50,10 @@ test('combinarFiltrosSolicitud ignora objetos vacios y conserva AND cuando aplic
   });
 });
 
-test('validarCambioEstadoPermitido mantiene restricciones del flujo', async () => {
+test('validateStatusChangeAllowed mantiene restricciones del flujo', async () => {
   assert.throws(
     () =>
-      validarCambioEstadoPermitido(
+      validateStatusChangeAllowed(
         {
           estado: EstadoSolicitud.FINALIZADA,
           asignadoAId: 10,
@@ -71,7 +71,7 @@ test('validarCambioEstadoPermitido mantiene restricciones del flujo', async () =
 
   assert.throws(
     () =>
-      validarCambioEstadoPermitido(
+      validateStatusChangeAllowed(
         {
           estado: EstadoSolicitud.INGRESADA,
           asignadoAId: null,
@@ -88,10 +88,10 @@ test('validarCambioEstadoPermitido mantiene restricciones del flujo', async () =
   );
 });
 
-test('validarSolicitudFinalizable y validarSolicitudCerrable protegen reglas terminales', () => {
+test('validateRequestFinalizable y validateRequestClosable protegen reglas terminales', () => {
   assert.throws(
     () =>
-      validarSolicitudFinalizable({
+      validateRequestFinalizable({
         estado: EstadoSolicitud.FINALIZADA,
         asignadoAId: 2,
       }),
@@ -100,17 +100,17 @@ test('validarSolicitudFinalizable y validarSolicitudCerrable protegen reglas ter
 
   assert.throws(
     () =>
-      validarSolicitudCerrable({
+      validateRequestClosable({
         estado: EstadoSolicitud.EN_PROCESO,
       }),
     /Solo se puede cerrar una solicitud que este en estado FINALIZADA/,
   );
 });
 
-test('validarTrabajadorPuedeOperarSolicitud y accion de historial siguen consistentes', () => {
+test('validateWorkerCanOperateRequest y la accion de historial siguen consistentes', () => {
   assert.throws(
     () =>
-      validarTrabajadorPuedeOperarSolicitud(
+      validateWorkerCanOperateRequest(
         { asignadoAId: 8 },
         {
           id: 9,
@@ -123,24 +123,40 @@ test('validarTrabajadorPuedeOperarSolicitud y accion de historial siguen consist
   );
 
   assert.equal(
-    obtenerAccionHistorialCambioEstado(EstadoSolicitud.FINALIZADA),
+    getHistoryActionForStatusChange(EstadoSolicitud.FINALIZADA),
     AccionHistorialSolicitud.FINALIZADA,
   );
   assert.equal(
-    obtenerAccionHistorialCambioEstado(EstadoSolicitud.EN_PROCESO),
+    getHistoryActionForStatusChange(EstadoSolicitud.EN_PROCESO),
     AccionHistorialSolicitud.ESTADO_CAMBIADO,
   );
 });
 
-test('presentarSolicitud conserva estado persistido y marca vencimiento visible', () => {
-  const solicitud = presentarSolicitud({
+test('validateWorkerCanViewRequest solo permite acceso al responsable asignado', () => {
+  assert.throws(
+    () =>
+      validateWorkerCanViewRequest(
+        { asignadoAId: 8 },
+        {
+          id: 9,
+          correo: 'otro@demo.cl',
+          rol: RolUsuario.TRABAJADOR,
+          areaId: 8,
+        },
+      ),
+    /No tiene permisos para acceder a esta solicitud/,
+  );
+});
+
+test('presentRequest conserva estado persistido y marca vencimiento visible', () => {
+  const solicitud = presentRequest({
     estado: EstadoSolicitud.EN_PROCESO,
     fechaVencimiento: new Date(Date.now() - 60_000),
     fechaCierre: null,
     titulo: 'Solicitud demo',
   });
 
-  assert.equal(estaSolicitudVencida(solicitud), true);
+  assert.equal(isRequestOverdue(solicitud), true);
   assert.equal(solicitud.estadoPersistido, EstadoSolicitud.EN_PROCESO);
   assert.equal(solicitud.estadoActual, EstadoSolicitud.VENCIDA);
   assert.equal(solicitud.estaVencida, true);

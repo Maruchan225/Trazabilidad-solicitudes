@@ -1,17 +1,17 @@
-export function normalizarRut(valor?: string | null) {
-  const limpio = valor?.replace(/[^0-9kK]/g, '').toUpperCase();
+export function normalizeRut(value?: string | null) {
+  const normalizedValue = value?.replace(/[^0-9kK]/g, '').toUpperCase();
 
-  if (!limpio || !/^\d{7,8}[0-9K]$/.test(limpio)) {
+  if (!normalizedValue || !/^\d{7,8}[0-9K]$/.test(normalizedValue)) {
     return undefined;
   }
 
-  return `${limpio.slice(0, -1)}-${limpio.slice(-1)}`;
+  return `${normalizedValue.slice(0, -1)}-${normalizedValue.slice(-1)}`;
 }
 
-export function normalizarRutEntrada(valor: unknown) {
-  if (typeof valor !== 'string') {
-    return valor;
+export function normalizeRutInput(value: unknown) {
+  if (typeof value !== 'string') {
+    return value;
   }
 
-  return normalizarRut(valor) ?? valor.trim().toUpperCase();
+  return normalizeRut(value) ?? value.trim().toUpperCase();
 }

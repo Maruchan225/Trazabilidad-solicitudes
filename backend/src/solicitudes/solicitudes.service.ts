@@ -12,10 +12,10 @@ import {
 import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { handlePrismaError } from '../comun/prisma-error.util';
 import {
-  USUARIO_PUBLICO_ARGS,
-  USUARIO_PUBLICO_CON_AREA_ARGS,
+  SAFE_USER_ARGS,
+  SAFE_USER_WITH_AREA_ARGS,
 } from '../comun/usuario-seguro.util';
-import { construirFiltroVisibilidadSolicitudes } from '../comun/visibilidad-solicitudes.util';
+import { buildRequestsVisibilityFilter } from '../comun/visibilidad-solicitudes.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AgregarObservacionSolicitudDto } from './dto/agregar-observacion-solicitud.dto';
 import { AsignarSolicitudDto } from './dto/asignar-solicitud.dto';
@@ -27,131 +27,126 @@ import { FiltroSolicitudesDto } from './dto/filtro-solicitudes.dto';
 import { FinalizarSolicitudDto } from './dto/finalizar-solicitud.dto';
 import {
   ACTIVE_REQUEST_WHERE,
-  combinarFiltrosSolicitud,
-  construirFiltroConsultaSolicitudes,
+  buildRequestsQueryFilter,
+  combineRequestFilters,
 } from './solicitudes-filtros';
 import {
-  obtenerAccionHistorialCambioEstado,
-  validarCambioEstadoPermitido,
-  validarSolicitudCerrable,
-  validarSolicitudEditable,
-  validarSolicitudFinalizable,
-  validarTrabajadorPuedeOperarSolicitud,
-  validarTrabajadorPuedeVerSolicitud,
+  getHistoryActionForStatusChange,
+  validateRequestClosable,
+  validateRequestEditable,
+  validateRequestFinalizable,
+  validateStatusChangeAllowed,
+  validateWorkerCanOperateRequest,
+  validateWorkerCanViewRequest,
 } from './solicitudes-flujo';
-import { presentarSolicitud } from './solicitudes-presentacion';
+import { presentRequest } from './solicitudes-presentacion';
 
-const SOLICITUD_INCLUDE = {
-  creadoPor: USUARIO_PUBLICO_CON_AREA_ARGS,
-  asignadoA: USUARIO_PUBLICO_CON_AREA_ARGS,
+const REQUEST_INCLUDE = {
+  creadoPor: SAFE_USER_WITH_AREA_ARGS,
+  asignadoA: SAFE_USER_WITH_AREA_ARGS,
   areaActual: true,
   tipoSolicitud: true,
 } satisfies Prisma.SolicitudInclude;
 
-type DatosHistorialSolicitud = Prisma.HistorialSolicitudUncheckedCreateInput;
+type RequestHistoryData = Prisma.HistorialSolicitudUncheckedCreateInput;
 
 @Injectable()
 export class SolicitudesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async crear(createSolicitudDto: CreateSolicitudDto, usuario: UsuarioToken) {
-    await this.asegurarUsuarioActivoExiste(usuario.id);
-    await this.asegurarAreaActivaExiste(createSolicitudDto.areaActualId);
-    const tipoSolicitud = await this.asegurarTipoSolicitudActivoExiste(
+    await this.ensureActiveUserExists(usuario.id);
+    const requestType = await this.ensureActiveRequestTypeExists(
       createSolicitudDto.tipoSolicitudId,
     );
-
-    if (createSolicitudDto.asignadoAId) {
-      await this.validarDestinoAsignacion(
-        createSolicitudDto.asignadoAId,
-        createSolicitudDto.areaActualId,
+    if (typeof createSolicitudDto.asignadoAId !== 'number') {
+      throw new BadRequestException(
+        'Debe asignar un responsable al crear la solicitud',
       );
     }
-
-    const fechaVencimiento = this.calcularFechaVencimientoPorSla(
-      tipoSolicitud.diasSla,
+    const externalReference = this.normalizeAndValidateExternalReference(
+      createSolicitudDto.numeroSolicitud,
+    );
+    const assignedUser = await this.validateAssignmentTarget(
+      createSolicitudDto.asignadoAId,
     );
 
-    const data: Prisma.SolicitudCreateInput = {
-      titulo: createSolicitudDto.titulo,
-      descripcion: createSolicitudDto.descripcion,
-      prioridad: createSolicitudDto.prioridad,
-      fechaVencimiento,
-      creadoPor: {
-        connect: { id: usuario.id },
-      },
-      areaActual: {
-        connect: { id: createSolicitudDto.areaActualId },
-      },
-      tipoSolicitud: {
-        connect: { id: createSolicitudDto.tipoSolicitudId },
-      },
-      ...(createSolicitudDto.asignadoAId
-        ? {
-            asignadoA: {
-              connect: { id: createSolicitudDto.asignadoAId },
-            },
-          }
-        : {}),
-    };
+    const areaActualId = this.resolveCurrentAreaId(
+      assignedUser.areaId,
+      usuario.areaId,
+    );
+    await this.ensureActiveAreaExists(areaActualId);
+
+    const dueDate = this.calculateDueDateFromSla(
+      requestType.diasSla,
+    );
 
     try {
-      const solicitudCreada = await this.prisma.$transaction(async (tx) => {
-        const solicitud = await tx.solicitud.create({ data });
-
-        await this.crearEntradaHistorial(tx, {
-          solicitudId: solicitud.id,
-          usuarioId: usuario.id,
-          accion: AccionHistorialSolicitud.CREADA,
-          estadoDestino: solicitud.estado,
-          areaDestinoId: solicitud.areaActualId,
-          asignadoDestinoId: solicitud.asignadoAId,
-          comentario: createSolicitudDto.comentario,
-        });
-
-        return solicitud;
+      const createdRequest = await this.createRequestWithAvailableSequenceNumber({
+        data: {
+          titulo: createSolicitudDto.titulo,
+          descripcion: createSolicitudDto.descripcion,
+          prioridad: createSolicitudDto.prioridad,
+          canalIngreso: createSolicitudDto.canalIngreso,
+          fechaVencimiento: dueDate,
+          creadoPor: {
+            connect: { id: usuario.id },
+          },
+          areaActual: {
+            connect: { id: areaActualId },
+          },
+          tipoSolicitud: {
+            connect: { id: createSolicitudDto.tipoSolicitudId },
+          },
+          ...(externalReference ? { numeroSolicitud: externalReference } : {}),
+          asignadoA: {
+            connect: { id: assignedUser.id },
+          },
+        },
+        usuarioId: usuario.id,
+        comentario: createSolicitudDto.comentario,
       });
 
-      return this.verDetalle(solicitudCreada.id, usuario);
+      return this.verDetalle(createdRequest.id, usuario);
     } catch (error) {
       handlePrismaError(error, 'solicitud');
     }
   }
 
   async listar(usuario: UsuarioToken, filtros: FiltroSolicitudesDto) {
-    await this.asegurarUsuarioActivoExiste(usuario.id);
+    await this.ensureActiveUserExists(usuario.id);
 
-    const where = combinarFiltrosSolicitud(
+    const where = combineRequestFilters(
       ACTIVE_REQUEST_WHERE,
-      construirFiltroVisibilidadSolicitudes(usuario),
-      construirFiltroConsultaSolicitudes(filtros),
+      buildRequestsVisibilityFilter(usuario),
+      buildRequestsQueryFilter(filtros),
     );
 
-    const solicitudes = await this.prisma.solicitud.findMany({
+    const requests = await this.prisma.solicitud.findMany({
       where,
-      include: SOLICITUD_INCLUDE,
+      include: REQUEST_INCLUDE,
       orderBy: [{ creadoEn: 'desc' }],
       ...(typeof filtros.offset === 'number' ? { skip: filtros.offset } : {}),
       ...(typeof filtros.limite === 'number' ? { take: filtros.limite } : {}),
     });
 
-    return solicitudes.map((solicitud) => presentarSolicitud(solicitud));
+    return requests.map((request) => presentRequest(request));
   }
 
   async verDetalle(id: number, usuario: UsuarioToken) {
-    await this.asegurarUsuarioActivoExiste(usuario.id);
+    await this.ensureActiveUserExists(usuario.id);
 
-    const solicitud = await this.prisma.solicitud.findFirst({
+    const request = await this.prisma.solicitud.findFirst({
       where: {
         id,
         ...ACTIVE_REQUEST_WHERE,
-        ...construirFiltroVisibilidadSolicitudes(usuario),
+        ...buildRequestsVisibilityFilter(usuario),
       },
       include: {
-        ...SOLICITUD_INCLUDE,
+        ...REQUEST_INCLUDE,
         historialEntradas: {
           include: {
-            usuario: USUARIO_PUBLICO_ARGS,
+            usuario: SAFE_USER_ARGS,
             areaOrigen: true,
             areaDestino: true,
           },
@@ -162,17 +157,17 @@ export class SolicitudesService {
       },
     });
 
-    if (!solicitud) {
+    if (!request) {
       throw new NotFoundException(`Solicitud con id ${id} no encontrada`);
     }
 
-    const historialEnriquecido = await this.enriquecerHistorialAsignaciones(
-      solicitud.historialEntradas,
+    const enrichedHistory = await this.enrichAssignmentHistory(
+      request.historialEntradas,
     );
 
-    return presentarSolicitud({
-      ...solicitud,
-      historialEntradas: historialEnriquecido,
+    return presentRequest({
+      ...request,
+      historialEntradas: enrichedHistory,
     });
   }
 
@@ -181,32 +176,31 @@ export class SolicitudesService {
     asignarSolicitudDto: AsignarSolicitudDto,
     usuario: UsuarioToken,
   ) {
-    const solicitud = await this.asegurarSolicitudActivaExiste(id);
-    await this.asegurarUsuarioActivoExiste(usuario.id);
-    const asignadoA = await this.validarDestinoAsignacion(
+    const request = await this.ensureActiveRequestExists(id);
+    await this.ensureActiveUserExists(usuario.id);
+    const assignedUser = await this.validateAssignmentTarget(
       asignarSolicitudDto.asignadoAId,
-      solicitud.areaActualId,
     );
 
-    validarSolicitudEditable(solicitud);
+    validateRequestEditable(request);
 
-    if (solicitud.asignadoAId === asignarSolicitudDto.asignadoAId) {
+    if (request.asignadoAId === asignarSolicitudDto.asignadoAId) {
       throw new BadRequestException(
         'La solicitud ya se encuentra asignada a este usuario',
       );
     }
 
-    await this.actualizarSolicitudConHistorial({
+    await this.updateRequestWithHistory({
       solicitudId: id,
       datosSolicitud: {
-        asignadoAId: asignadoA.id,
+        asignadoAId: assignedUser.id,
       },
-      historial: {
+      history: {
         solicitudId: id,
         usuarioId: usuario.id,
         accion: AccionHistorialSolicitud.ASIGNADA,
-        asignadoOrigenId: solicitud.asignadoAId,
-        asignadoDestinoId: asignadoA.id,
+        asignadoOrigenId: request.asignadoAId,
+        asignadoDestinoId: assignedUser.id,
         comentario: asignarSolicitudDto.comentario,
       },
     });
@@ -214,44 +208,39 @@ export class SolicitudesService {
     return this.verDetalle(id, usuario);
   }
 
-  async derivarSolicitudAArea(
+  async derivarSolicitudAUsuario(
     id: number,
     derivarSolicitudDto: DerivarSolicitudDto,
     usuario: UsuarioToken,
   ) {
-    const solicitud = await this.asegurarSolicitudActivaExiste(id);
-    await this.asegurarUsuarioActivoExiste(usuario.id);
-    await this.asegurarAreaActivaExiste(derivarSolicitudDto.areaDestinoId);
-    const asignadoA = await this.validarDestinoAsignacion(
+    const request = await this.ensureActiveRequestExists(id);
+    await this.ensureActiveUserExists(usuario.id);
+    const assignedUser = await this.validateAssignmentTarget(
       derivarSolicitudDto.asignadoAId,
-      derivarSolicitudDto.areaDestinoId,
     );
 
-    validarSolicitudEditable(solicitud);
+    validateRequestEditable(request);
 
-    if (solicitud.areaActualId === derivarSolicitudDto.areaDestinoId) {
+    if (request.asignadoAId === assignedUser.id) {
       throw new BadRequestException(
-        'La solicitud ya se encuentra en el area de destino',
+        'La solicitud ya se encuentra derivada a este usuario',
       );
     }
 
-    await this.actualizarSolicitudConHistorial({
+    await this.updateRequestWithHistory({
       solicitudId: id,
       datosSolicitud: {
-        areaActualId: derivarSolicitudDto.areaDestinoId,
-        asignadoAId: asignadoA.id,
+        asignadoAId: assignedUser.id,
         estado: EstadoSolicitud.DERIVADA,
       },
-      historial: {
+      history: {
         solicitudId: id,
         usuarioId: usuario.id,
         accion: AccionHistorialSolicitud.DERIVADA,
-        estadoOrigen: solicitud.estado,
+        estadoOrigen: request.estado,
         estadoDestino: EstadoSolicitud.DERIVADA,
-        areaOrigenId: solicitud.areaActualId,
-        areaDestinoId: derivarSolicitudDto.areaDestinoId,
-        asignadoOrigenId: solicitud.asignadoAId,
-        asignadoDestinoId: asignadoA.id,
+        asignadoOrigenId: request.asignadoAId,
+        asignadoDestinoId: assignedUser.id,
         comentario: derivarSolicitudDto.comentario,
       },
     });
@@ -264,29 +253,29 @@ export class SolicitudesService {
     cambiarEstadoSolicitudDto: CambiarEstadoSolicitudDto,
     usuario: UsuarioToken,
   ) {
-    const solicitud = await this.asegurarSolicitudActivaExiste(id);
-    await this.asegurarUsuarioActivoExiste(usuario.id);
-    validarTrabajadorPuedeOperarSolicitud(solicitud, usuario);
-    validarSolicitudEditable(solicitud);
+    const request = await this.ensureActiveRequestExists(id);
+    await this.ensureActiveUserExists(usuario.id);
+    validateWorkerCanOperateRequest(request, usuario);
+    validateRequestEditable(request);
 
-    validarCambioEstadoPermitido(
-      solicitud,
+    validateStatusChangeAllowed(
+      request,
       cambiarEstadoSolicitudDto.estado,
       usuario,
     );
 
-    await this.actualizarSolicitudConHistorial({
+    await this.updateRequestWithHistory({
       solicitudId: id,
       datosSolicitud: {
         estado: cambiarEstadoSolicitudDto.estado,
       },
-      historial: {
+      history: {
         solicitudId: id,
         usuarioId: usuario.id,
-        accion: obtenerAccionHistorialCambioEstado(
+        accion: getHistoryActionForStatusChange(
           cambiarEstadoSolicitudDto.estado,
         ),
-        estadoOrigen: solicitud.estado,
+        estadoOrigen: request.estado,
         estadoDestino: cambiarEstadoSolicitudDto.estado,
         comentario: cambiarEstadoSolicitudDto.comentario,
       },
@@ -300,18 +289,17 @@ export class SolicitudesService {
     agregarObservacionSolicitudDto: AgregarObservacionSolicitudDto,
     usuario: UsuarioToken,
   ) {
-    const solicitud = await this.asegurarSolicitudActivaExiste(id);
-    await this.asegurarUsuarioActivoExiste(usuario.id);
-    validarTrabajadorPuedeVerSolicitud(solicitud, usuario);
+    const request = await this.ensureActiveRequestExists(id);
+    await this.ensureActiveUserExists(usuario.id);
+    validateWorkerCanViewRequest(request, usuario);
 
-    await this.registrarHistorialSolicitud({
+    await this.registerRequestHistory({
       solicitudId: id,
       usuarioId: usuario.id,
       accion: AccionHistorialSolicitud.OBSERVACION,
-      estadoOrigen: solicitud.estado,
-      estadoDestino: solicitud.estado,
-      areaDestinoId: solicitud.areaActualId,
-      asignadoDestinoId: solicitud.asignadoAId,
+      estadoOrigen: request.estado,
+      estadoDestino: request.estado,
+      asignadoDestinoId: request.asignadoAId,
       comentario: agregarObservacionSolicitudDto.comentario,
     });
 
@@ -323,21 +311,21 @@ export class SolicitudesService {
     finalizarSolicitudDto: FinalizarSolicitudDto,
     usuario: UsuarioToken,
   ) {
-    const solicitud = await this.asegurarSolicitudActivaExiste(id);
-    await this.asegurarUsuarioActivoExiste(usuario.id);
-    validarTrabajadorPuedeOperarSolicitud(solicitud, usuario);
-    validarSolicitudFinalizable(solicitud);
+    const request = await this.ensureActiveRequestExists(id);
+    await this.ensureActiveUserExists(usuario.id);
+    validateWorkerCanOperateRequest(request, usuario);
+    validateRequestFinalizable(request);
 
-    await this.actualizarSolicitudConHistorial({
+    await this.updateRequestWithHistory({
       solicitudId: id,
       datosSolicitud: {
         estado: EstadoSolicitud.FINALIZADA,
       },
-      historial: {
+      history: {
         solicitudId: id,
         usuarioId: usuario.id,
         accion: AccionHistorialSolicitud.FINALIZADA,
-        estadoOrigen: solicitud.estado,
+        estadoOrigen: request.estado,
         estadoDestino: EstadoSolicitud.FINALIZADA,
         comentario: finalizarSolicitudDto.comentario,
       },
@@ -351,21 +339,21 @@ export class SolicitudesService {
     cerrarSolicitudDto: CerrarSolicitudDto,
     usuario: UsuarioToken,
   ) {
-    const solicitud = await this.asegurarSolicitudActivaExiste(id);
-    await this.asegurarUsuarioActivoExiste(usuario.id);
-    validarSolicitudCerrable(solicitud);
+    const request = await this.ensureActiveRequestExists(id);
+    await this.ensureActiveUserExists(usuario.id);
+    validateRequestClosable(request);
 
-    await this.actualizarSolicitudConHistorial({
+    await this.updateRequestWithHistory({
       solicitudId: id,
       datosSolicitud: {
         estado: EstadoSolicitud.CERRADA,
         fechaCierre: new Date(),
       },
-      historial: {
+      history: {
         solicitudId: id,
         usuarioId: usuario.id,
         accion: AccionHistorialSolicitud.CERRADA,
-        estadoOrigen: solicitud.estado,
+        estadoOrigen: request.estado,
         estadoDestino: EstadoSolicitud.CERRADA,
         comentario: cerrarSolicitudDto.comentario,
       },
@@ -379,22 +367,21 @@ export class SolicitudesService {
     actorUsuarioId: number,
     comentario?: string,
   ) {
-    const solicitud = await this.asegurarSolicitudActivaExiste(id);
-    await this.asegurarUsuarioActivoExiste(actorUsuarioId);
+    const request = await this.ensureActiveRequestExists(id);
+    await this.ensureActiveUserExists(actorUsuarioId);
 
-    await this.actualizarSolicitudConHistorial({
+    await this.updateRequestWithHistory({
       solicitudId: id,
       datosSolicitud: {
         eliminadoEn: new Date(),
       },
-      historial: {
+      history: {
         solicitudId: id,
         usuarioId: actorUsuarioId,
         accion: AccionHistorialSolicitud.ELIMINADA,
-        estadoOrigen: solicitud.estado,
-        estadoDestino: solicitud.estado,
-        areaDestinoId: solicitud.areaActualId,
-        asignadoDestinoId: solicitud.asignadoAId,
+        estadoOrigen: request.estado,
+        estadoDestino: request.estado,
+        asignadoDestinoId: request.asignadoAId,
         comentario,
       },
     });
@@ -404,35 +391,35 @@ export class SolicitudesService {
     };
   }
 
-  private async asegurarSolicitudActivaExiste(id: number) {
-    const solicitud = await this.prisma.solicitud.findFirst({
+  private async ensureActiveRequestExists(id: number) {
+    const request = await this.prisma.solicitud.findFirst({
       where: {
         id,
         ...ACTIVE_REQUEST_WHERE,
       },
-      include: SOLICITUD_INCLUDE,
+      include: REQUEST_INCLUDE,
     });
 
-    if (!solicitud) {
+    if (!request) {
       throw new NotFoundException(`Solicitud con id ${id} no encontrada`);
     }
 
-    return solicitud;
+    return request;
   }
 
-  private async asegurarUsuarioActivoExiste(id: number) {
-    const usuario = await this.prisma.usuario.findUnique({
+  private async ensureActiveUserExists(id: number) {
+    const user = await this.prisma.usuario.findUnique({
       where: { id },
     });
 
-    if (!usuario || !usuario.activo) {
+    if (!user || !user.activo) {
       throw new NotFoundException(`Usuario con id ${id} no encontrado`);
     }
 
-    return usuario;
+    return user;
   }
 
-  private async asegurarAreaActivaExiste(id: number) {
+  private async ensureActiveAreaExists(id: number) {
     const area = await this.prisma.area.findUnique({
       where: { id },
     });
@@ -444,119 +431,203 @@ export class SolicitudesService {
     return area;
   }
 
-  private async asegurarTipoSolicitudActivoExiste(id: number) {
-    const tipoSolicitud = await this.prisma.tipoSolicitud.findUnique({
+  private async ensureActiveRequestTypeExists(id: number) {
+    const requestType = await this.prisma.tipoSolicitud.findUnique({
       where: { id },
     });
 
-    if (!tipoSolicitud || !tipoSolicitud.activo) {
+    if (!requestType || !requestType.activo) {
       throw new NotFoundException(
         `Tipo de solicitud con id ${id} no encontrado`,
       );
     }
 
-    return tipoSolicitud;
+    return requestType;
   }
 
-  private async validarDestinoAsignacion(
-    asignadoAId: number,
-    areaActualId: number,
-  ) {
-    const asignadoA = await this.asegurarUsuarioActivoExiste(asignadoAId);
+  private async validateAssignmentTarget(assignedUserId: number) {
+    const assignedUser = await this.ensureActiveUserExists(assignedUserId);
 
-    if (asignadoA.rol !== RolUsuario.TRABAJADOR) {
+    if (assignedUser.rol !== RolUsuario.TRABAJADOR) {
       throw new BadRequestException(
         'Solo se puede asignar la solicitud a un usuario con rol TRABAJADOR',
       );
     }
 
-    if (asignadoA.areaId !== areaActualId) {
-      throw new BadRequestException(
-        'El trabajador asignado debe pertenecer al area actual de la solicitud',
-      );
-    }
-
-    return asignadoA;
+    return assignedUser;
   }
 
-  private calcularFechaVencimientoPorSla(diasSla?: number | null) {
-    if (!diasSla) {
+  private calculateDueDateFromSla(slaDays?: number | null) {
+    if (!slaDays) {
       throw new BadRequestException(
         'El tipo de solicitud seleccionado no tiene dias SLA configurados',
       );
     }
 
-    const fechaVencimiento = new Date();
-    fechaVencimiento.setDate(fechaVencimiento.getDate() + diasSla);
-    return fechaVencimiento;
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + slaDays);
+    return dueDate;
   }
 
-  private async enriquecerHistorialAsignaciones<
+  private resolveCurrentAreaId(
+    assignedAreaId: number | undefined,
+    actorAreaId: number,
+  ) {
+    return assignedAreaId ?? actorAreaId;
+  }
+
+  private normalizeAndValidateExternalReference(externalReference?: string) {
+    if (typeof externalReference !== 'string') {
+      return undefined;
+    }
+
+    const normalizedReference = externalReference.trim();
+
+    if (normalizedReference.length < 1) {
+      throw new BadRequestException(
+        'La referencia externa no puede estar vacia',
+      );
+    }
+
+    if (normalizedReference.length > 100) {
+      throw new BadRequestException(
+        'La referencia externa no puede superar 100 caracteres',
+      );
+    }
+
+    return normalizedReference;
+  }
+
+  private async createRequestWithAvailableSequenceNumber({
+    data,
+    usuarioId,
+    comentario,
+  }: {
+    data: Omit<Prisma.SolicitudCreateInput, 'correlativo'>;
+    usuarioId: number;
+    comentario?: string;
+  }) {
+    // Mantiene compatibilidad con el modelo actual: si hay colision de unicidad,
+    // se reintenta y no se generan duplicados silenciosos.
+    for (let intento = 0; intento < 3; intento += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const sequenceNumber = await this.getNextSequenceNumber(tx);
+          const request = await tx.solicitud.create({
+            data: {
+              ...data,
+              correlativo: sequenceNumber,
+            },
+          });
+
+          await this.createHistoryEntry(tx, {
+            solicitudId: request.id,
+            usuarioId,
+            accion: AccionHistorialSolicitud.CREADA,
+            estadoDestino: request.estado,
+            asignadoDestinoId: request.asignadoAId,
+            comentario,
+          });
+
+          return request;
+        });
+      } catch (error) {
+        if (this.isSequenceNumberConflict(error) && intento < 2) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('No fue posible generar el correlativo');
+  }
+
+  private async getNextSequenceNumber(tx: Prisma.TransactionClient) {
+    const result = await tx.solicitud.aggregate({
+      _max: {
+        correlativo: true,
+      },
+    });
+
+    return (result._max.correlativo ?? 0) + 1;
+  }
+
+  private isSequenceNumberConflict(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002' &&
+      Array.isArray(error.meta?.target) &&
+      error.meta.target.includes('correlativo')
+    );
+  }
+
+  private async enrichAssignmentHistory<
     T extends Array<{
       asignadoOrigenId?: number | null;
       asignadoDestinoId?: number | null;
     }>,
-  >(historial: T) {
-    const usuariosIds = Array.from(
+  >(history: T) {
+    const userIds = Array.from(
       new Set(
-        historial.flatMap((entrada) =>
-          [entrada.asignadoOrigenId, entrada.asignadoDestinoId].filter(
+        history.flatMap((entry) =>
+          [entry.asignadoOrigenId, entry.asignadoDestinoId].filter(
             (id): id is number => typeof id === 'number',
           ),
         ),
       ),
     );
 
-    if (usuariosIds.length === 0) {
-      return historial;
+    if (userIds.length === 0) {
+      return history;
     }
 
-    const usuarios = await this.prisma.usuario.findMany({
+    const users = await this.prisma.usuario.findMany({
       where: {
         id: {
-          in: usuariosIds,
+          in: userIds,
         },
       },
       include: {
         area: true,
       },
-      omit: USUARIO_PUBLICO_ARGS.omit,
+      omit: SAFE_USER_ARGS.omit,
     });
 
-    const usuariosPorId = new Map(usuarios.map((item) => [item.id, item]));
+    const usersById = new Map(users.map((item) => [item.id, item]));
 
-    return historial.map((entrada) => ({
-      ...entrada,
-      asignadoOrigen: entrada.asignadoOrigenId
-        ? (usuariosPorId.get(entrada.asignadoOrigenId) ?? null)
+    return history.map((entry) => ({
+      ...entry,
+      asignadoOrigen: entry.asignadoOrigenId
+        ? (usersById.get(entry.asignadoOrigenId) ?? null)
         : null,
-      asignadoDestino: entrada.asignadoDestinoId
-        ? (usuariosPorId.get(entrada.asignadoDestinoId) ?? null)
+      asignadoDestino: entry.asignadoDestinoId
+        ? (usersById.get(entry.asignadoDestinoId) ?? null)
         : null,
     }));
   }
 
-  private crearEntradaHistorial(
+  private createHistoryEntry(
     tx: Prisma.TransactionClient,
-    data: DatosHistorialSolicitud,
+    data: RequestHistoryData,
   ) {
     return tx.historialSolicitud.create({ data });
   }
 
-  private async registrarHistorialSolicitud(data: DatosHistorialSolicitud) {
+  private async registerRequestHistory(data: RequestHistoryData) {
     await this.prisma.$transaction(async (tx) => {
-      await this.crearEntradaHistorial(tx, data);
+      await this.createHistoryEntry(tx, data);
     });
   }
 
-  private async actualizarSolicitudConHistorial({
+  private async updateRequestWithHistory({
     solicitudId,
     datosSolicitud,
-    historial,
+    history,
   }: {
     solicitudId: number;
     datosSolicitud?: Prisma.SolicitudUncheckedUpdateInput;
-    historial: DatosHistorialSolicitud;
+    history: RequestHistoryData;
   }) {
     await this.prisma.$transaction(async (tx) => {
       if (datosSolicitud) {
@@ -566,7 +637,7 @@ export class SolicitudesService {
         });
       }
 
-      await this.crearEntradaHistorial(tx, historial);
+      await this.createHistoryEntry(tx, history);
     });
   }
 }

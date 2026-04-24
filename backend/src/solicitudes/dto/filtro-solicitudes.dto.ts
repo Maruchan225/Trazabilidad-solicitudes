@@ -19,10 +19,5 @@ export class FiltroSolicitudesDto extends FiltroPaginacionDto {
   @IsOptional()
   @Transform(({ value }) => (value === undefined ? value : Number(value)))
   @IsInt()
-  areaId?: number;
-
-  @IsOptional()
-  @Transform(({ value }) => (value === undefined ? value : Number(value)))
-  @IsInt()
   tipoSolicitudId?: number;
 }

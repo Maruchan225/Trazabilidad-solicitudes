@@ -1,7 +1,7 @@
 import type { RolUsuario } from '../tipos/comun.js';
 
 const ROLES_GESTION: RolUsuario[] = ['ENCARGADO', 'REEMPLAZO'];
-const RUTAS_PERMITIDAS_TRABAJADOR = ['/solicitudes'];
+const RUTAS_PERMITIDAS_TRABAJADOR = ['/dashboard', '/solicitudes'];
 
 export function tieneAlgunRol(
   rolActual: RolUsuario | undefined,
@@ -27,7 +27,7 @@ export function esRolTrabajador(rolActual?: RolUsuario) {
 }
 
 export function obtenerRutaInicialPorRol(rolActual?: RolUsuario) {
-  return esRolTrabajador(rolActual) ? '/solicitudes' : '/dashboard';
+  return '/dashboard';
 }
 
 export function rutaPermitidaParaRol(

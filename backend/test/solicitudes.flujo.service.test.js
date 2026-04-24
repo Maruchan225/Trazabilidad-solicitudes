@@ -4,11 +4,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   AccionHistorialSolicitud,
+  CanalIngreso,
   EstadoSolicitud,
+  Prisma,
   PrioridadSolicitud,
   RolUsuario,
 } = require('@prisma/client');
-const { ForbiddenException } = require('@nestjs/common');
+const { BadRequestException, ForbiddenException } = require('@nestjs/common');
 const { SolicitudesService } = require('../dist/src/solicitudes/solicitudes.service.js');
 
 function crearPrismaFlujoSolicitudes() {
@@ -170,6 +172,9 @@ function crearPrismaFlujoSolicitudes() {
       create: async ({ data }) => {
         estado.solicitud = {
           id: estado.nextSolicitudId++,
+          numeroSolicitud: data.numeroSolicitud,
+          correlativo: data.correlativo,
+          canalIngreso: data.canalIngreso,
           titulo: data.titulo,
           descripcion: data.descripcion,
           estado: EstadoSolicitud.INGRESADA,
@@ -187,6 +192,11 @@ function crearPrismaFlujoSolicitudes() {
 
         return snapshotSolicitud();
       },
+      aggregate: async () => ({
+        _max: {
+          correlativo: estado.solicitud?.correlativo ?? null,
+        },
+      }),
       update: async ({ data }) => {
         estado.solicitud = {
           ...estado.solicitud,
@@ -214,7 +224,7 @@ function crearPrismaFlujoSolicitudes() {
   return { prisma, estado, snapshotSolicitud };
 }
 
-test('SolicitudesService cubre el flujo principal de crear, asignar, derivar, finalizar y cerrar', async () => {
+test('SolicitudesService cubre el flujo principal de crear, asignar, derivar a usuario, finalizar y cerrar', async () => {
   const { prisma, estado, snapshotSolicitud } = crearPrismaFlujoSolicitudes();
   const service = new SolicitudesService(prisma);
   service.verDetalle = async () => snapshotSolicitud();
@@ -234,10 +244,12 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar, fi
 
   await service.crear(
     {
+      numeroSolicitud: 'DOM-2026-001',
       titulo: 'Solicitud de retiro de escombros',
       descripcion: 'Se requiere apoyo de Obras para retiro en via publica.',
       prioridad: PrioridadSolicitud.ALTA,
-      areaActualId: 1,
+      canalIngreso: CanalIngreso.PRESENCIAL,
+      asignadoAId: 2,
       tipoSolicitudId: 1,
       comentario: 'Ingreso inicial',
     },
@@ -248,16 +260,15 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar, fi
 
   await service.asignarSolicitud(
     solicitudId,
-    { asignadoAId: 2, comentario: 'Asignacion inicial en Partes' },
+    { asignadoAId: 4, comentario: 'Reasignacion operativa inicial' },
     encargado,
   );
 
-  await service.derivarSolicitudAArea(
+  await service.derivarSolicitudAUsuario(
     solicitudId,
     {
-      areaDestinoId: 2,
       asignadoAId: 3,
-      comentario: 'Derivacion a Obras',
+      comentario: 'Derivacion a nuevo responsable',
     },
     encargado,
   );
@@ -283,8 +294,11 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar, fi
     encargado,
   );
 
-  assert.equal(estado.solicitud.areaActualId, 2);
+  assert.equal(estado.solicitud.areaActualId, 1);
   assert.equal(estado.solicitud.asignadoAId, 3);
+  assert.equal(estado.solicitud.correlativo, 1);
+  assert.equal(estado.solicitud.numeroSolicitud, 'DOM-2026-001');
+  assert.equal(estado.solicitud.canalIngreso, CanalIngreso.PRESENCIAL);
   assert.equal(estado.solicitud.estado, EstadoSolicitud.CERRADA);
   assert.ok(estado.solicitud.fechaCierre instanceof Date);
   assert.ok(estado.solicitud.fechaVencimiento instanceof Date);
@@ -308,11 +322,13 @@ test('SolicitudesService.crear calcula la fecha de vencimiento desde el SLA del 
 
   await service.crear(
     {
+      numeroSolicitud: 'DOM-2026-002',
       titulo: 'Solicitud con vencimiento automatico',
       descripcion: 'Debe tomar la fecha a partir del SLA configurado.',
       prioridad: PrioridadSolicitud.MEDIA,
-      areaActualId: 1,
+      canalIngreso: CanalIngreso.CORREO,
       tipoSolicitudId: 1,
+      asignadoAId: 3,
     },
     {
       id: 1,
@@ -325,8 +341,61 @@ test('SolicitudesService.crear calcula la fecha de vencimiento desde el SLA del 
   const diferenciaMs = estado.solicitud.fechaVencimiento.getTime() - ahora;
   const unDiaMs = 24 * 60 * 60 * 1000;
 
+  assert.equal(estado.solicitud.correlativo, 1);
+  assert.equal(estado.solicitud.areaActualId, 2);
   assert.ok(diferenciaMs >= unDiaMs - 5_000);
   assert.ok(diferenciaMs <= unDiaMs + 5_000);
+});
+
+test('SolicitudesService.crear permite omitir numeroSolicitud y usa correlativo como identificador operativo', async () => {
+  const { prisma, estado } = crearPrismaFlujoSolicitudes();
+  const service = new SolicitudesService(prisma);
+
+  await service.crear(
+    {
+      titulo: 'Solicitud sin numero externo',
+      descripcion: 'Debe poder crearse sin numeroSolicitud manual.',
+      prioridad: PrioridadSolicitud.MEDIA,
+      canalIngreso: CanalIngreso.CORREO,
+      asignadoAId: 2,
+      tipoSolicitudId: 1,
+    },
+    {
+      id: 1,
+      correo: 'encargado@demo.cl',
+      rol: RolUsuario.ENCARGADO,
+      areaId: 1,
+    },
+  );
+
+  assert.equal(estado.solicitud.correlativo, 1);
+  assert.equal(estado.solicitud.numeroSolicitud, undefined);
+});
+
+test('SolicitudesService.crear exige responsable desde el alta', async () => {
+  const { prisma } = crearPrismaFlujoSolicitudes();
+  const service = new SolicitudesService(prisma);
+
+  await assert.rejects(
+    service.crear(
+      {
+        titulo: 'Solicitud sin responsable',
+        descripcion: 'Debe rechazar cualquier solicitud nueva sin responsable.',
+        prioridad: PrioridadSolicitud.MEDIA,
+        canalIngreso: CanalIngreso.CORREO,
+        tipoSolicitudId: 1,
+      },
+      {
+        id: 1,
+        correo: 'encargado@demo.cl',
+        rol: RolUsuario.ENCARGADO,
+        areaId: 1,
+      },
+    ),
+    (error) =>
+      error instanceof BadRequestException &&
+      error.message === 'Debe asignar un responsable al crear la solicitud',
+  );
 });
 
 test('SolicitudesService.crear rechaza tipos sin SLA configurado', async () => {
@@ -336,11 +405,13 @@ test('SolicitudesService.crear rechaza tipos sin SLA configurado', async () => {
   await assert.rejects(
     service.crear(
       {
-        titulo: 'Solicitud sin SLA',
-        descripcion: 'Debe rechazar la creacion si el tipo no define SLA.',
-        prioridad: PrioridadSolicitud.MEDIA,
-        areaActualId: 1,
-        tipoSolicitudId: 2,
+      numeroSolicitud: 'DOM-2026-003',
+      titulo: 'Solicitud sin SLA',
+      descripcion: 'Debe rechazar la creacion si el tipo no define SLA.',
+      prioridad: PrioridadSolicitud.MEDIA,
+      canalIngreso: CanalIngreso.PRESENCIAL,
+      asignadoAId: 2,
+      tipoSolicitudId: 2,
       },
       {
         id: 1,
@@ -353,7 +424,222 @@ test('SolicitudesService.crear rechaza tipos sin SLA configurado', async () => {
   );
 });
 
-test('SolicitudesService impide que un trabajador del area opere una solicitud si no esta asignado', async () => {
+test('SolicitudesService.crear normaliza y valida numeroSolicitud en backend', async () => {
+  const { prisma, estado } = crearPrismaFlujoSolicitudes();
+  const service = new SolicitudesService(prisma);
+
+  await service.crear(
+    {
+      numeroSolicitud: '   DOM-2026-010   ',
+      titulo: 'Solicitud con numero normalizado',
+      descripcion: 'Debe persistir el numero de solicitud sin espacios externos.',
+      prioridad: PrioridadSolicitud.MEDIA,
+      canalIngreso: CanalIngreso.CORREO,
+      asignadoAId: 2,
+      tipoSolicitudId: 1,
+    },
+    {
+      id: 1,
+      correo: 'encargado@demo.cl',
+      rol: RolUsuario.ENCARGADO,
+      areaId: 1,
+    },
+  );
+
+  assert.equal(estado.solicitud.numeroSolicitud, 'DOM-2026-010');
+
+  await assert.rejects(
+    service.crear(
+      {
+        numeroSolicitud: '   ',
+        titulo: 'Solicitud invalida',
+        descripcion: 'La validacion del backend debe rechazar solo espacios.',
+        prioridad: PrioridadSolicitud.MEDIA,
+        canalIngreso: CanalIngreso.PRESENCIAL,
+        asignadoAId: 2,
+        tipoSolicitudId: 1,
+      },
+      {
+        id: 1,
+        correo: 'encargado@demo.cl',
+        rol: RolUsuario.ENCARGADO,
+        areaId: 1,
+      },
+    ),
+    (error) =>
+      error instanceof BadRequestException &&
+      error.message === 'La referencia externa no puede estar vacia',
+  );
+});
+
+test('SolicitudesService.derivarSolicitudAUsuario deriva solo por usuario y conserva el area tecnica actual', async () => {
+  const { prisma, estado, snapshotSolicitud } = crearPrismaFlujoSolicitudes();
+  const service = new SolicitudesService(prisma);
+  service.verDetalle = async () => snapshotSolicitud();
+
+  await service.crear(
+    {
+      numeroSolicitud: 'DOM-2026-011',
+      titulo: 'Solicitud para derivacion segura',
+      descripcion: 'Se probara la derivacion solo entre usuarios.',
+      prioridad: PrioridadSolicitud.ALTA,
+      canalIngreso: CanalIngreso.PRESENCIAL,
+      tipoSolicitudId: 1,
+      asignadoAId: 2,
+    },
+    {
+      id: 1,
+      correo: 'encargado@demo.cl',
+      rol: RolUsuario.ENCARGADO,
+      areaId: 1,
+    },
+  );
+
+  await service.derivarSolicitudAUsuario(
+    estado.solicitud.id,
+    {
+      asignadoAId: 3,
+      comentario: 'Derivacion valida',
+    },
+    {
+      id: 1,
+      correo: 'encargado@demo.cl',
+      rol: RolUsuario.ENCARGADO,
+      areaId: 1,
+    },
+  );
+
+  assert.equal(estado.solicitud.asignadoAId, 3);
+  assert.equal(estado.solicitud.areaActualId, 1);
+  assert.equal(estado.historial.at(-1).areaDestinoId, undefined);
+  assert.equal(estado.historial.at(-1).asignadoDestinoId, 3);
+  assert.equal(estado.historial[0].areaDestinoId, undefined);
+});
+
+test('SolicitudesService.crear reintenta cuando ocurre un conflicto de correlativo', async () => {
+  let intentoCreate = 0;
+  let historialCreado = false;
+  let maxCorrelativo = 0;
+
+  const prisma = {
+    usuario: {
+      findUnique: async ({ where }) => {
+        if (where.id === 1) {
+          return { id: 1, activo: true, rol: RolUsuario.ENCARGADO, areaId: 1 };
+        }
+
+        if (where.id === 2) {
+          return { id: 2, activo: true, rol: RolUsuario.TRABAJADOR, areaId: 1 };
+        }
+
+        return null;
+      },
+    },
+    tipoSolicitud: {
+      findUnique: async () => ({
+        id: 1,
+        activo: true,
+        diasSla: 1,
+      }),
+    },
+    area: {
+      findUnique: async () => ({
+        id: 1,
+        activo: true,
+      }),
+    },
+    solicitud: {
+      findFirst: async () => ({
+        id: 200,
+        numeroSolicitud: 'DOM-2026-020',
+        correlativo: 2,
+        canalIngreso: CanalIngreso.CORREO,
+        titulo: 'Solicitud con retry',
+        descripcion: 'Debe persistir tras un conflicto de correlativo.',
+        estado: EstadoSolicitud.INGRESADA,
+        prioridad: PrioridadSolicitud.MEDIA,
+        fechaVencimiento: new Date(),
+        fechaCierre: null,
+        eliminadoEn: null,
+        creadoPorId: 1,
+        asignadoAId: null,
+        areaActualId: 1,
+        tipoSolicitudId: 1,
+        creadoEn: new Date(),
+        actualizadoEn: new Date(),
+        creadoPor: { id: 1, nombres: 'Elena', apellidos: 'Gomez', area: { id: 1 } },
+        asignadoA: null,
+        areaActual: { id: 1, nombre: 'Partes' },
+        tipoSolicitud: { id: 1, nombre: 'Oficio' },
+      }),
+      aggregate: async () => ({
+        _max: {
+          correlativo: maxCorrelativo,
+        },
+      }),
+      create: async ({ data }) => {
+        intentoCreate += 1;
+
+        if (intentoCreate === 1) {
+          maxCorrelativo = 1;
+          throw new Prisma.PrismaClientKnownRequestError(
+            'Unique constraint failed on the fields: (`correlativo`)',
+            {
+              code: 'P2002',
+              clientVersion: 'test',
+              meta: { target: ['correlativo'] },
+            },
+          );
+        }
+
+        return {
+          id: 200,
+          estado: EstadoSolicitud.INGRESADA,
+          areaActualId: 1,
+          asignadoAId: data.asignadoA?.connect?.id ?? null,
+          correlativo: data.correlativo,
+        };
+      },
+    },
+    historialSolicitud: {
+      create: async () => {
+        historialCreado = true;
+        return {};
+      },
+    },
+    $transaction: async (callback) =>
+      callback({
+        solicitud: prisma.solicitud,
+        historialSolicitud: prisma.historialSolicitud,
+      }),
+  };
+
+  const service = new SolicitudesService(prisma);
+  service.verDetalle = async () => ({ id: 200 });
+
+  await service.crear(
+    {
+      numeroSolicitud: 'DOM-2026-020',
+      titulo: 'Solicitud con retry',
+      descripcion: 'Debe persistir tras un conflicto de correlativo.',
+      prioridad: PrioridadSolicitud.MEDIA,
+      canalIngreso: CanalIngreso.CORREO,
+      asignadoAId: 2,
+      tipoSolicitudId: 1,
+    },
+    {
+      id: 1,
+      correo: 'encargado@demo.cl',
+      rol: RolUsuario.ENCARGADO,
+      areaId: 1,
+    },
+  );
+
+  assert.equal(intentoCreate, 2);
+  assert.equal(historialCreado, true);
+});
+
+test('SolicitudesService impide que un trabajador no asignado opere una solicitud', async () => {
   const { prisma, estado } = crearPrismaFlujoSolicitudes();
   estado.solicitud = {
     id: 77,

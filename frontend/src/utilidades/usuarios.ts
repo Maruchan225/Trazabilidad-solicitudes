@@ -39,7 +39,7 @@ export function construirPayloadUsuario(values: UsuarioPayload): UsuarioPayload 
     email: normalizarTextoRequerido(values.email).toLowerCase(),
     telefono: normalizarTextoOpcional(values.telefono),
     rol: values.rol,
-    areaId: values.areaId,
+    ...(typeof values.areaId === 'number' ? { areaId: values.areaId } : {}),
     activo: values.activo ?? true,
     contrasena: normalizarTextoOpcional(contrasena),
   };

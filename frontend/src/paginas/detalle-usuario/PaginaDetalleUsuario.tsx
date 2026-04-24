@@ -20,7 +20,6 @@ import { TagPrioridad } from '@/componentes/ui/tags/TagPrioridad';
 import { useAutenticacion } from '@/ganchos/useAutenticacion';
 import { useConsulta } from '@/ganchos/useConsulta';
 import { useMutacion } from '@/ganchos/useMutacion';
-import { areasService } from '@/servicios/areas/areas.service';
 import { solicitudesService } from '@/servicios/solicitudes/solicitudes.service';
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
 import type { Solicitud } from '@/tipos/solicitudes';
@@ -46,12 +45,10 @@ export function PaginaDetalleUsuario() {
     [usuarioId],
   );
   const solicitudes = useConsulta(() => solicitudesService.listar(), []);
-  const areas = useConsulta(() => areasService.listar(), []);
 
   const solicitudesACargo = (solicitudes.data ?? []).filter(
     (solicitud) => solicitud.asignadoA?.id === usuarioId,
   );
-  const areasActivas = (areas.data ?? []).filter((area) => area.activo);
   const puedeGestionar = puedeGestionarCatalogos(sesion?.usuario.rol);
 
   function cerrarModal() {
@@ -136,9 +133,6 @@ export function PaginaDetalleUsuario() {
                 <Descriptions.Item label="Rol">
                   {usuario.data?.rol}
                 </Descriptions.Item>
-                <Descriptions.Item label="Area">
-                  {usuario.data?.area?.nombre ?? 'Sin area'}
-                </Descriptions.Item>
                 <Descriptions.Item label="Estado">
                   <TagActivo activo={Boolean(usuario.data?.activo)} />
                 </Descriptions.Item>
@@ -184,12 +178,6 @@ export function PaginaDetalleUsuario() {
                     ),
                   },
                   {
-                    title: 'Area',
-                    render: (_, record) => record.areaActual.nombre,
-                    sorter: (a, b) =>
-                      a.areaActual.nombre.localeCompare(b.areaActual.nombre),
-                  },
-                  {
                     title: 'Prioridad',
                     dataIndex: 'prioridad',
                     render: (prioridad) => <TagPrioridad prioridad={prioridad} />,
@@ -212,8 +200,6 @@ export function PaginaDetalleUsuario() {
       >
         <FormularioUsuario
           form={form}
-          areas={areasActivas}
-          loadingAreas={areas.loading}
           modo="editar"
           onFinish={(values) => void guardar(values)}
         />

@@ -1,4 +1,4 @@
-import { App, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag } from 'antd';
+import { Alert, App, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag } from 'antd';
 import { useState } from 'react';
 import { EstadoConsulta } from '@/componentes/ui/EstadoConsulta';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
@@ -12,6 +12,7 @@ import { esErrorApiConEstado, mensajeContiene, obtenerMensajeError } from '@/uti
 import { puedeGestionarCatalogos } from '@/utilidades/permisos';
 
 export function PaginaTiposSolicitud() {
+  const CATALOGO_SOLO_LECTURA = true;
   const { message } = App.useApp();
   const { sesion } = useAutenticacion();
   const consulta = useConsulta(() => tiposSolicitudService.listar(), []);
@@ -20,7 +21,9 @@ export function PaginaTiposSolicitud() {
   const [tipoEditando, setTipoEditando] = useState<TipoSolicitud | null>(null);
   const { loading: guardando, ejecutar } = useMutacion();
   const tiposSolicitud = consulta.data ?? [];
-  const puedeGestionar = puedeGestionarCatalogos(sesion?.usuario.rol);
+  const puedeGestionar =
+    puedeGestionarCatalogos(sesion?.usuario.rol) && !CATALOGO_SOLO_LECTURA;
+  const puedeVerAvisoConfiguracion = puedeGestionarCatalogos(sesion?.usuario.rol);
 
   function cerrarModal() {
     setModalAbierto(false);
@@ -129,8 +132,16 @@ export function PaginaTiposSolicitud() {
   return (
     <PaginaModulo
       titulo="Tipos de Solicitud"
-      descripcion="Catalogo de tipos de solicitud para la operacion municipal."
+      descripcion="Catalogo predefinido de tipos de solicitud para la operacion DOM."
     >
+      {puedeVerAvisoConfiguracion ? (
+        <Alert
+          className="mb-4"
+          type="info"
+          showIcon
+          message="Los tipos de solicitud se administran como configuracion inicial de DOM y actualmente estan en modo solo lectura."
+        />
+      ) : null}
       <Card
         className="rounded-3xl"
         extra={

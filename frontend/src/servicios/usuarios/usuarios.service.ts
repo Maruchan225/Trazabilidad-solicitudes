@@ -4,7 +4,6 @@ import type { Usuario, UsuarioPayload } from '@/tipos/usuarios';
 type FiltrosUsuarios = {
   busqueda?: string;
   rol?: string;
-  areaId?: number;
   activo?: boolean;
 };
 

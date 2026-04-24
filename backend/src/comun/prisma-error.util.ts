@@ -16,6 +16,18 @@ export function handlePrismaError(error: unknown, entityName: string): never {
       throw new ConflictException('El rut ingresado ya esta registrado');
     }
 
+    if (entityName === 'solicitud' && campos.includes('numeroSolicitud')) {
+      throw new ConflictException(
+        'La referencia externa ingresada ya esta registrada',
+      );
+    }
+
+    if (entityName === 'solicitud' && campos.includes('correlativo')) {
+      throw new ConflictException(
+        'No fue posible generar un correlativo unico para la solicitud',
+      );
+    }
+
     throw new ConflictException(
       `Se produjo un conflicto de unicidad al guardar ${entityName}`,
     );

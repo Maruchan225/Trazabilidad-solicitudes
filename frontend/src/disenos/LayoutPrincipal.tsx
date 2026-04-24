@@ -19,18 +19,11 @@ const itemsMenu: Array<{
     key: '/dashboard',
     icon: <Icono nombre="dashboard" />,
     label: 'Dashboard',
-    roles: ['ENCARGADO', 'REEMPLAZO'],
   },
   {
     key: '/solicitudes',
     icon: <Icono nombre="solicitudes" />,
     label: 'Solicitudes',
-  },
-  {
-    key: '/areas',
-    icon: <Icono nombre="areas" />,
-    label: 'Areas',
-    roles: ['ENCARGADO', 'REEMPLAZO'],
   },
   {
     key: '/usuarios',
@@ -55,7 +48,6 @@ const itemsMenu: Array<{
 const titulosPorRuta: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/solicitudes': 'Solicitudes',
-  '/areas': 'Areas',
   '/usuarios': 'Usuarios',
   '/tipos-solicitud': 'Tipos de Solicitud',
   '/reportes': 'Reportes',
@@ -87,11 +79,14 @@ export function LayoutPrincipal() {
         <div className="flex h-full flex-col px-4 py-5">
           <div className="mb-6 rounded-3xl bg-white/10 p-4 text-white">
             <Text className="!text-xs !uppercase !tracking-[0.24em] !text-white/70">
-              Sistema Interno
+              Operacion Tecnica
             </Text>
             <Title level={4} className="!mb-2 !mt-2 !text-white">
-              Trazabilidad Municipal
+              DOM
             </Title>
+            <Text className="!text-white/75">
+              Seguimiento operativo de solicitudes, vencimientos y responsables.
+            </Text>
           </div>
 
           <Menu
@@ -120,14 +115,14 @@ export function LayoutPrincipal() {
       <Layout>
         <Header className="flex h-auto items-center justify-between border-b border-municipal-100 bg-white/80 px-6 py-4 backdrop-blur">
           <div>
-            <Breadcrumb items={[{ title: 'Sistema' }, { title: titulo }]} />
+            <Breadcrumb items={[{ title: 'DOM' }, { title: titulo }]} />
             <Title level={3} className="!mb-0 !mt-2 !text-black">
               {titulo}
             </Title>
           </div>
 
           <Space size="middle">
-            <TagRol rol={sesion?.usuario.rol} fallback="Municipal" />
+            <TagRol rol={sesion?.usuario.rol} fallback="DOM" />
             <Button icon={<Icono nombre="usuario" />}>
               {sesion?.usuario.nombres ?? 'Mi Perfil'}
             </Button>

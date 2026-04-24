@@ -10,6 +10,7 @@ test('UsuariosService.crear normaliza el rut antes de persistir', async () => {
 
   const prisma = {
     area: {
+      findFirst: async () => ({ id: 1, nombre: 'DOM', activo: true }),
       findUnique: async () => ({ id: 1, nombre: 'Secretaria' }),
     },
     usuario: {
@@ -52,6 +53,52 @@ test('UsuariosService.crear normaliza el rut antes de persistir', async () => {
 
   assert.equal(createArgs.data.rut, '12345678-K');
   assert.notEqual(createArgs.data.contrasena, 'Demo1234!');
+});
+
+test('UsuariosService.crear resuelve un area tecnica por defecto cuando no se informa areaId', async () => {
+  let createArgs;
+
+  const prisma = {
+    area: {
+      findFirst: async () => ({ id: 4, nombre: 'DOM', activo: true }),
+    },
+    usuario: {
+      create: async (args) => {
+        createArgs = args;
+        return {
+          id: 11,
+          nombres: 'Luis',
+          apellidos: 'Rojas',
+          rut: args.data.rut,
+          email: 'luis@demo.cl',
+          telefono: null,
+          rol: RolUsuario.TRABAJADOR,
+          activo: true,
+          areaId: 4,
+          area: { id: 4, nombre: 'DOM' },
+          creadoEn: new Date(),
+          actualizadoEn: new Date(),
+          _count: {
+            solicitudesAsignadas: 0,
+          },
+        };
+      },
+    },
+  };
+
+  const service = new UsuariosService(prisma);
+
+  await service.crear({
+    nombres: 'Luis',
+    apellidos: 'Rojas',
+    rut: '11.111.111-1',
+    email: 'luis@demo.cl',
+    contrasena: 'Demo1234!',
+    rol: RolUsuario.TRABAJADOR,
+    activo: true,
+  });
+
+  assert.equal(createArgs.data.areaId, 4);
 });
 
 test('UsuariosService.listar incluye busqueda por rut normalizado', async () => {

@@ -1,9 +1,9 @@
+import type { PrioridadSolicitud } from '@/tipos/comun';
 import type { EstadoSolicitud } from '@/tipos/comun';
 
 export type FiltrosReportes = {
   fechaDesde?: string;
   fechaHasta?: string;
-  areaId?: number;
   trabajadorId?: number;
   tipoSolicitudId?: number;
 };
@@ -29,20 +29,12 @@ export type SolicitudesPorEstado = {
 export type CargaPorTrabajador = {
   trabajadorId: number;
   nombreCompleto: string;
-  areaId: number;
-  area: string;
   totalAsignadas: number;
   enProceso: number;
   pendientesInformacion: number;
   finalizadas: number;
   cerradas: number;
   vencidas: number;
-};
-
-export type SolicitudesPorArea = {
-  areaId: number;
-  area: string;
-  cantidad: number;
 };
 
 export type TiempoPromedioRespuesta = {
@@ -53,12 +45,13 @@ export type TiempoPromedioRespuesta = {
 
 export type SolicitudVencidaReporte = {
   id: number;
+  correlativo: number;
+  /** Compatibilidad temporal: referencia externa heredada, no identificador principal visible. */
+  numeroSolicitud?: string | null;
   titulo: string;
   estado: EstadoSolicitud;
   fechaVencimiento: string;
   diasAtraso: number;
-  areaId: number;
-  area: string;
   tipoSolicitudId: number;
   tipoSolicitud: string;
   asignadoAId?: number | null;
@@ -69,4 +62,18 @@ export type SolicitudesPorTipo = {
   tipoSolicitudId: number;
   tipoSolicitud: string;
   cantidad: number;
+};
+
+export type SolicitudesPorPrioridad = {
+  prioridad: PrioridadSolicitud;
+  cantidad: number;
+};
+
+export type DashboardTrabajador = {
+  solicitudesNuevas: number;
+  solicitudesEnProceso: number;
+  solicitudesCerradas: number;
+  solicitudesPorVencer: number;
+  solicitudesVencidas: number;
+  solicitudesACargo: number;
 };
