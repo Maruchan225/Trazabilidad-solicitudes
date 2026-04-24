@@ -1,4 +1,4 @@
-import { Form, Input, Select } from 'antd';
+import { Form, Input, Select, Typography } from 'antd';
 import type { FormInstance } from 'antd/es/form';
 import type { Area } from '@/tipos/areas';
 import type { PrioridadSolicitud } from '@/tipos/comun';
@@ -35,6 +35,18 @@ export function FormularioSolicitud({
   areaSeleccionada,
   onFinish,
 }: FormularioSolicitudProps) {
+  const tipoSolicitudSeleccionadoId = Form.useWatch('tipoSolicitudId', form);
+  const tipoSolicitudSeleccionado = tiposSolicitud.find(
+    (tipo) => tipo.id === tipoSolicitudSeleccionadoId,
+  );
+  const diasSla = tipoSolicitudSeleccionado?.diasSla ?? null;
+  const fechaVencimientoCalculada =
+    typeof diasSla === 'number'
+      ? new Date(Date.now() + diasSla * 24 * 60 * 60 * 1000).toLocaleString(
+          'es-CL',
+        )
+      : null;
+
   return (
     <Form form={form} layout="vertical" onFinish={onFinish}>
       <Form.Item
@@ -73,13 +85,6 @@ export function FormularioSolicitud({
         <Select<PrioridadSolicitud> options={OPCIONES_PRIORIDAD_SOLICITUD} />
       </Form.Item>
       <Form.Item
-        label="Fecha de vencimiento"
-        name="fechaVencimiento"
-        rules={[{ required: true, message: 'Ingrese la fecha de vencimiento' }]}
-      >
-        <Input type="datetime-local" />
-      </Form.Item>
-      <Form.Item
         label="Area"
         name="areaActualId"
         rules={[{ required: true, message: 'Seleccione el area' }]}
@@ -99,6 +104,15 @@ export function FormularioSolicitud({
           loading={loadingTipos}
           options={mapearOpcionesTiposSolicitud(tiposSolicitud)}
         />
+      </Form.Item>
+      <Form.Item label="Fecha de vencimiento calculada">
+        <Typography.Text className="!text-black/75">
+          {!tipoSolicitudSeleccionado
+            ? 'Seleccione un tipo de solicitud para calcular el vencimiento.'
+            : fechaVencimientoCalculada
+              ? `Se calculara automaticamente a ${diasSla} dia(s) del momento de creacion: ${fechaVencimientoCalculada}.`
+              : 'El tipo de solicitud seleccionado no tiene dias SLA configurados.'}
+        </Typography.Text>
       </Form.Item>
       <Form.Item label="Asignar a" name="asignadoAId">
         <Select

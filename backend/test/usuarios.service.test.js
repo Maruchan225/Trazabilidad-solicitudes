@@ -100,3 +100,49 @@ test('UsuariosService.listar aplica paginacion opcional', async () => {
   assert.equal(findManyArgs.skip, 40);
   assert.equal(findManyArgs.where.rol, RolUsuario.TRABAJADOR);
 });
+
+test('UsuariosService.eliminar retorna usuario saneado', async () => {
+  let deleteArgs;
+
+  const prisma = {
+    usuario: {
+      findUnique: async () => ({
+        id: 10,
+        nombres: 'Ana',
+        apellidos: 'Perez',
+        email: 'ana@demo.cl',
+        areaId: 1,
+        activo: true,
+        area: { id: 1, nombre: 'Secretaria' },
+        _count: {
+          solicitudesAsignadas: 2,
+        },
+      }),
+      delete: async (args) => {
+        deleteArgs = args;
+
+        return {
+          id: 10,
+          nombres: 'Ana',
+          apellidos: 'Perez',
+          email: 'ana@demo.cl',
+          areaId: 1,
+          activo: true,
+          area: { id: 1, nombre: 'Secretaria' },
+          _count: {
+            solicitudesAsignadas: 2,
+          },
+        };
+      },
+    },
+  };
+
+  const service = new UsuariosService(prisma);
+  const resultado = await service.eliminar(10);
+
+  assert.equal(deleteArgs.omit.contrasena, true);
+  assert.equal(deleteArgs.include.area, true);
+  assert.equal(deleteArgs.include._count.select.solicitudesAsignadas, true);
+  assert.equal(resultado.totalSolicitudes, 2);
+  assert.equal('contrasena' in resultado, false);
+});

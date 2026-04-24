@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { compare, hash } from 'bcrypt';
 import { Prisma } from '@prisma/client';
+import { USUARIO_PUBLICO_CON_AREA_ARGS } from '../comun/usuario-seguro.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { handlePrismaError } from '../comun/prisma-error.util';
 import { normalizarRut } from '../comun/rut.util';
@@ -159,9 +160,22 @@ export class UsuariosService {
     await this.obtenerPorId(id);
 
     try {
-      return await this.prisma.usuario.delete({
+      const usuario = await this.prisma.usuario.delete({
         where: { id },
+        include: {
+          area: true,
+          _count: {
+            select: {
+              solicitudesAsignadas: true,
+            },
+          },
+        },
+        omit: {
+          contrasena: true,
+        },
       });
+
+      return this.mapearUsuarioConTotales(usuario);
     } catch (error) {
       handlePrismaError(error, 'usuario');
     }
@@ -176,6 +190,19 @@ export class UsuariosService {
       where: { email },
       include: {
         area: true,
+      },
+    });
+  }
+
+  buscarContextoAutenticacionPorId(id: number) {
+    return this.prisma.usuario.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        rol: true,
+        areaId: true,
+        activo: true,
       },
     });
   }

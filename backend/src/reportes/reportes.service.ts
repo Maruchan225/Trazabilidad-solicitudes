@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { EstadoSolicitud, Prisma } from '@prisma/client';
+import { USUARIO_PUBLICO_CON_AREA_ARGS } from '../comun/usuario-seguro.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { FiltroReportesDto } from './dto/filtro-reportes.dto';
 
@@ -205,14 +206,7 @@ export class ReportesService {
       where: this.construirFiltroSolicitudesVencidas(where),
       include: {
         areaActual: true,
-        asignadoA: {
-          omit: {
-            contrasena: true,
-          },
-          include: {
-            area: true,
-          },
-        },
+        asignadoA: USUARIO_PUBLICO_CON_AREA_ARGS,
         tipoSolicitud: true,
       },
       orderBy: {

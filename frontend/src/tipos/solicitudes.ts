@@ -46,7 +46,6 @@ export type SolicitudPayload = {
   titulo: string;
   descripcion: string;
   prioridad?: PrioridadSolicitud;
-  fechaVencimiento: string;
   asignadoAId?: number;
   areaActualId: number;
   tipoSolicitudId: number;

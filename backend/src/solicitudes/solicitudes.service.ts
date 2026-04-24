@@ -11,6 +11,10 @@ import {
 } from '@prisma/client';
 import { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
 import { handlePrismaError } from '../comun/prisma-error.util';
+import {
+  USUARIO_PUBLICO_ARGS,
+  USUARIO_PUBLICO_CON_AREA_ARGS,
+} from '../comun/usuario-seguro.util';
 import { construirFiltroVisibilidadSolicitudes } from '../comun/visibilidad-solicitudes.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AgregarObservacionSolicitudDto } from './dto/agregar-observacion-solicitud.dto';
@@ -38,16 +42,8 @@ import {
 import { presentarSolicitud } from './solicitudes-presentacion';
 
 const SOLICITUD_INCLUDE = {
-  creadoPor: {
-    include: {
-      area: true,
-    },
-  },
-  asignadoA: {
-    include: {
-      area: true,
-    },
-  },
+  creadoPor: USUARIO_PUBLICO_CON_AREA_ARGS,
+  asignadoA: USUARIO_PUBLICO_CON_AREA_ARGS,
   areaActual: true,
   tipoSolicitud: true,
 } satisfies Prisma.SolicitudInclude;
@@ -61,7 +57,7 @@ export class SolicitudesService {
   async crear(createSolicitudDto: CreateSolicitudDto, usuario: UsuarioToken) {
     await this.asegurarUsuarioActivoExiste(usuario.id);
     await this.asegurarAreaActivaExiste(createSolicitudDto.areaActualId);
-    await this.asegurarTipoSolicitudActivoExiste(
+    const tipoSolicitud = await this.asegurarTipoSolicitudActivoExiste(
       createSolicitudDto.tipoSolicitudId,
     );
 
@@ -72,8 +68,8 @@ export class SolicitudesService {
       );
     }
 
-    const fechaVencimiento = this.parsearFechaVencimiento(
-      createSolicitudDto.fechaVencimiento,
+    const fechaVencimiento = this.calcularFechaVencimientoPorSla(
+      tipoSolicitud.diasSla,
     );
 
     const data: Prisma.SolicitudCreateInput = {
@@ -155,11 +151,7 @@ export class SolicitudesService {
         ...SOLICITUD_INCLUDE,
         historialEntradas: {
           include: {
-            usuario: {
-              omit: {
-                contrasena: true,
-              },
-            },
+            usuario: USUARIO_PUBLICO_ARGS,
             areaOrigen: true,
             areaDestino: true,
           },
@@ -487,13 +479,15 @@ export class SolicitudesService {
     return asignadoA;
   }
 
-  private parsearFechaVencimiento(fecha: string) {
-    const fechaVencimiento = new Date(fecha);
-
-    if (Number.isNaN(fechaVencimiento.getTime())) {
-      throw new BadRequestException('La fecha de vencimiento no es valida');
+  private calcularFechaVencimientoPorSla(diasSla?: number | null) {
+    if (!diasSla) {
+      throw new BadRequestException(
+        'El tipo de solicitud seleccionado no tiene dias SLA configurados',
+      );
     }
 
+    const fechaVencimiento = new Date();
+    fechaVencimiento.setDate(fechaVencimiento.getDate() + diasSla);
     return fechaVencimiento;
   }
 
@@ -526,9 +520,7 @@ export class SolicitudesService {
       include: {
         area: true,
       },
-      omit: {
-        contrasena: true,
-      },
+      omit: USUARIO_PUBLICO_ARGS.omit,
     });
 
     const usuariosPorId = new Map(usuarios.map((item) => [item.id, item]));

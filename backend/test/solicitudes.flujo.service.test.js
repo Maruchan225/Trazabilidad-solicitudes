@@ -68,7 +68,10 @@ function crearPrismaFlujoSolicitudes() {
     [2, { id: 2, nombre: 'Obras', activo: true }],
   ]);
 
-  const tipos = new Map([[1, { id: 1, nombre: 'Oficio', activo: true }]]);
+  const tipos = new Map([
+    [1, { id: 1, nombre: 'Oficio', activo: true, diasSla: 1 }],
+    [2, { id: 2, nombre: 'Sin SLA', activo: true, diasSla: null }],
+  ]);
 
   const estado = {
     historial: [],
@@ -234,7 +237,6 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar, fi
       titulo: 'Solicitud de retiro de escombros',
       descripcion: 'Se requiere apoyo de Obras para retiro en via publica.',
       prioridad: PrioridadSolicitud.ALTA,
-      fechaVencimiento: new Date(Date.now() + 86400000).toISOString(),
       areaActualId: 1,
       tipoSolicitudId: 1,
       comentario: 'Ingreso inicial',
@@ -285,6 +287,7 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar, fi
   assert.equal(estado.solicitud.asignadoAId, 3);
   assert.equal(estado.solicitud.estado, EstadoSolicitud.CERRADA);
   assert.ok(estado.solicitud.fechaCierre instanceof Date);
+  assert.ok(estado.solicitud.fechaVencimiento instanceof Date);
   assert.deepEqual(
     estado.historial.map((item) => item.accion),
     [
@@ -295,6 +298,58 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar, fi
       AccionHistorialSolicitud.FINALIZADA,
       AccionHistorialSolicitud.CERRADA,
     ],
+  );
+});
+
+test('SolicitudesService.crear calcula la fecha de vencimiento desde el SLA del tipo', async () => {
+  const { prisma, estado } = crearPrismaFlujoSolicitudes();
+  const service = new SolicitudesService(prisma);
+  const ahora = Date.now();
+
+  await service.crear(
+    {
+      titulo: 'Solicitud con vencimiento automatico',
+      descripcion: 'Debe tomar la fecha a partir del SLA configurado.',
+      prioridad: PrioridadSolicitud.MEDIA,
+      areaActualId: 1,
+      tipoSolicitudId: 1,
+    },
+    {
+      id: 1,
+      correo: 'encargado@demo.cl',
+      rol: RolUsuario.ENCARGADO,
+      areaId: 1,
+    },
+  );
+
+  const diferenciaMs = estado.solicitud.fechaVencimiento.getTime() - ahora;
+  const unDiaMs = 24 * 60 * 60 * 1000;
+
+  assert.ok(diferenciaMs >= unDiaMs - 5_000);
+  assert.ok(diferenciaMs <= unDiaMs + 5_000);
+});
+
+test('SolicitudesService.crear rechaza tipos sin SLA configurado', async () => {
+  const { prisma } = crearPrismaFlujoSolicitudes();
+  const service = new SolicitudesService(prisma);
+
+  await assert.rejects(
+    service.crear(
+      {
+        titulo: 'Solicitud sin SLA',
+        descripcion: 'Debe rechazar la creacion si el tipo no define SLA.',
+        prioridad: PrioridadSolicitud.MEDIA,
+        areaActualId: 1,
+        tipoSolicitudId: 2,
+      },
+      {
+        id: 1,
+        correo: 'encargado@demo.cl',
+        rol: RolUsuario.ENCARGADO,
+        areaId: 1,
+      },
+    ),
+    /no tiene dias SLA configurados/i,
   );
 });
 
