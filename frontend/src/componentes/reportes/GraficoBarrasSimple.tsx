@@ -19,36 +19,36 @@ interface GraficoBarrasSimpleProps {
   color?: string;
 }
 
-const PALETA_COLORES = [
-  '#0d9488', // Teal
-  '#4f46e5', // Indigo
-  '#d97706', // Amber
-  '#e11d48', // Rose
-  '#7c3aed', // Violet
-  '#10b981', // Emerald
-  '#0ea5e9', // Sky
-  '#475569', // Slate
+const COLORES_SEMAFORO = [
+  '#10b981', // Verde
+  '#f59e0b', // Amarillo
+  '#ef4444', // Rojo
 ];
 
 export function GraficoBarrasSimple({ datos }: GraficoBarrasSimpleProps) {
   return (
-    <div className="h-[300px] w-full mt-4">
+    <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={datos}
-          margin={{ top: 20, right: 10, left: -20, bottom: 0 }}
+          layout="horizontal"
+          margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
         >
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-          <XAxis 
-            dataKey="nombre" 
-            tick={{ fontSize: 10, fill: '#9ca3af', fontWeight: 500 }}
+          <XAxis
+            dataKey="nombre"
             axisLine={false}
             tickLine={false}
+            interval={0}
+            tick={{ fontSize: 11, fill: '#6b7280', fontWeight: 500 }}
+            tickFormatter={(valor: string) =>
+              valor === 'Atencion al Publico' ? 'Atencion' : valor
+            }
           />
-          <YAxis 
-            tick={{ fontSize: 10, fill: '#9ca3af' }}
+          <YAxis
             axisLine={false}
             tickLine={false}
+            tick={{ fontSize: 11, fill: '#9ca3af' }}
           />
           <Tooltip
             cursor={{ fill: '#f9fafb', opacity: 0.4 }}
@@ -63,11 +63,13 @@ export function GraficoBarrasSimple({ datos }: GraficoBarrasSimpleProps) {
             dataKey="cantidad"
             radius={[10, 10, 0, 0]}
             barSize={32}
-            background={{ fill: '#f3f4f6', radius: 10 }}
             animationDuration={1500}
           >
             {datos.map((_, index) => (
-              <Cell key={`cell-${index}`} fill={PALETA_COLORES[index % PALETA_COLORES.length]} />
+              <Cell
+                key={`cell-${index}`}
+                fill={COLORES_SEMAFORO[index % COLORES_SEMAFORO.length]}
+              />
             ))}
           </Bar>
         </BarChart>

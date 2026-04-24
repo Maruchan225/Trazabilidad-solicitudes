@@ -6,12 +6,14 @@ import { Icono } from '@/componentes/ui/Icono';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
 import { TagEstadoSolicitud } from '@/componentes/ui/tags/TagEstadoSolicitud';
 import { TagPrioridad } from '@/componentes/ui/tags/TagPrioridad';
+import { PanelResumenTrabajador } from '@/componentes/solicitudes/PanelResumenTrabajador';
 import { useAutenticacion } from '@/ganchos/useAutenticacion';
 import { useConsulta } from '@/ganchos/useConsulta';
 import { useMutacion } from '@/ganchos/useMutacion';
 import { useValorDebounceado } from '@/ganchos/useValorDebounceado';
 import { areasService } from '@/servicios/areas/areas.service';
 import { solicitudesService } from '@/servicios/solicitudes/solicitudes.service';
+import { reportesService } from '@/servicios/reportes/reportes.service';
 import { tiposSolicitudService } from '@/servicios/tipos-solicitud/tiposSolicitud.service';
 import { usuariosService } from '@/servicios/usuarios/usuarios.service';
 import type { EstadoSolicitud, PrioridadSolicitud } from '@/tipos/comun';
@@ -149,6 +151,11 @@ export function PaginaSolicitudes() {
       }),
     [busquedaAplicada, estadoFiltro, areaFiltro, tipoFiltro, prioridadFiltro],
   );
+  const esTrabajador = sesion?.usuario.rol === 'TRABAJADOR';
+  const resumenTrabajador = useConsulta(
+    () => (esTrabajador ? reportesService.obtenerResumenGeneral({ trabajadorId: sesion?.usuario.id }) : Promise.resolve(null)),
+    [esTrabajador, sesion?.usuario.id],
+  );
   const areas = useConsulta(() => areasService.listar(), []);
   const tiposSolicitud = useConsulta(() => tiposSolicitudService.listar(), []);
   const usuarios = useConsulta(() => usuariosService.listar(), []);
@@ -270,6 +277,12 @@ export function PaginaSolicitudes() {
       titulo="Solicitudes"
       descripcion="Listado de solicitudes ingresadas al sistema."
     >
+      {esTrabajador && (
+        <PanelResumenTrabajador 
+          resumen={resumenTrabajador.data} 
+          loading={resumenTrabajador.loading} 
+        />
+      )}
       <Card
         className="rounded-3xl"
         extra={

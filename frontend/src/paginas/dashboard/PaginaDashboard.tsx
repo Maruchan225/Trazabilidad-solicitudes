@@ -2,6 +2,7 @@ import { Alert, Card, Col, Row, Space, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import { GraficoBarrasEstado } from '@/componentes/reportes/GraficoBarrasEstado';
 import { GraficoBarrasSimple } from '@/componentes/reportes/GraficoBarrasSimple';
+import { GraficoRadarSalud } from '@/componentes/reportes/GraficoRadarSalud';
 import { GraficoTortaSimple } from '@/componentes/reportes/GraficoTortaSimple';
 import { TarjetaTablaReporte } from '@/componentes/reportes/TarjetaTablaReporte';
 import { PaginaModulo } from '@/componentes/ui/PaginaModulo';
@@ -93,6 +94,18 @@ export function PaginaDashboard() {
     estado: formatearEstado(item.estado),
   }));
 
+  const itemsEstado = porEstado.data?.items ?? [];
+  const obtenerCantidad = (estado: string) =>
+    itemsEstado.find((i) => i.estado === estado)?.cantidad ?? 0;
+
+  const datosSalud = {
+    demanda: obtenerCantidad('INGRESADA') + obtenerCantidad('DERIVADA'),
+    operacion: obtenerCantidad('EN_PROCESO'),
+    bloqueos: obtenerCantidad('PENDIENTE_INFORMACION'),
+    resolucion: obtenerCantidad('FINALIZADA') + obtenerCantidad('CERRADA'),
+    riesgo: obtenerCantidad('VENCIDA') || (resumen.data?.solicitudesVencidas ?? 0),
+  };
+
   return (
     <PaginaModulo
       titulo="Dashboard"
@@ -106,13 +119,19 @@ export function PaginaDashboard() {
       ]}
     >
       <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12} xl={8}>
+        <Col xs={24} lg={12} xl={6}>
+          <Card title="Balance de Gestión" className="rounded-3xl h-full">
+            <GraficoRadarSalud datos={datosSalud} />
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={12} xl={6}>
           <Card title="Estado de solicitudes" className="rounded-3xl h-full">
             <GraficoBarrasEstado datos={estadosFormateados} />
           </Card>
         </Col>
 
-        <Col xs={24} lg={12} xl={8}>
+        <Col xs={24} lg={12} xl={6}>
           <Card title="Áreas con más solicitudes" className="rounded-3xl h-full">
             <GraficoBarrasSimple
               datos={areasTop.map((item) => ({
@@ -123,7 +142,7 @@ export function PaginaDashboard() {
           </Card>
         </Col>
 
-        <Col xs={24} lg={12} xl={8}>
+        <Col xs={24} lg={12} xl={6}>
           <Card title="Tipos más frecuentes" className="rounded-3xl h-full">
             <GraficoTortaSimple
               datos={tiposTop.map((item) => ({
@@ -195,7 +214,7 @@ export function PaginaDashboard() {
                 <div className="mt-2">
                   <TagCantidad
                     valor={`${tiempoPromedio.data?.tiempoPromedioDias ?? 0} días`}
-                    color="#6366f1"
+                    color="#10b981"
                   />
                 </div>
               </div>

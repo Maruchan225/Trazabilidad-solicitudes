@@ -5,7 +5,7 @@ import { FiltroReportesDto } from './dto/filtro-reportes.dto';
 import { ReportesService } from './reportes.service';
 
 @Controller('reportes')
-@Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO)
+@Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO, RolUsuario.TRABAJADOR)
 export class ReportesController {
   constructor(private readonly reportesService: ReportesService) {}
 

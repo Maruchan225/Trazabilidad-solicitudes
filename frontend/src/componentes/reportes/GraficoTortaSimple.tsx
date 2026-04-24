@@ -16,12 +16,10 @@ interface GraficoTortaSimpleProps {
   datos: PieData[];
 }
 
-const COLORES = [
-  '#4f46e5', // Indigo
-  '#0d9488', // Teal
-  '#d97706', // Amber
-  '#e11d48', // Rose
-  '#7c3aed', // Violet
+const COLORES_SEMAFORO = [
+  '#10b981', // Verde
+  '#f59e0b', // Amarillo
+  '#ef4444', // Rojo
 ];
 
 export function GraficoTortaSimple({ datos }: GraficoTortaSimpleProps) {
@@ -38,23 +36,28 @@ export function GraficoTortaSimple({ datos }: GraficoTortaSimpleProps) {
             paddingAngle={5}
             dataKey="cantidad"
             nameKey="nombre"
+            animationDuration={1500}
           >
             {datos.map((_, index) => (
-              <Cell key={`cell-${index}`} fill={COLORES[index % COLORES.length]} />
+              <Cell
+                key={`cell-${index}`}
+                fill={COLORES_SEMAFORO[index % COLORES_SEMAFORO.length]}
+              />
             ))}
           </Pie>
           <Tooltip
             contentStyle={{
-              borderRadius: '12px',
+              borderRadius: '16px',
               border: 'none',
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              padding: '12px',
             }}
           />
           <Legend
+            iconType="circle"
             verticalAlign="bottom"
             align="center"
-            iconType="circle"
-            wrapperStyle={{ paddingTop: '20px' }}
+            wrapperStyle={{ paddingTop: '20px', fontSize: '11px' }}
           />
         </PieChart>
       </ResponsiveContainer>

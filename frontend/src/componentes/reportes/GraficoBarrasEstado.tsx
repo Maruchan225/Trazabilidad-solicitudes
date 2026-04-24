@@ -18,16 +18,17 @@ interface GraficoBarrasEstadoProps {
   datos: BarData[];
 }
 
-const PALETA_COLORES = [
-  '#4f46e5', // Indigo
-  '#0d9488', // Teal
-  '#d97706', // Amber
-  '#e11d48', // Rose
-  '#7c3aed', // Violet
-  '#10b981', // Emerald
-  '#0ea5e9', // Sky
-  '#475569', // Slate
-];
+const COLORES_SEMAFORO: Record<string, string> = {
+  Vencida: '#ef4444', // Rojo
+  'Pendiente Información': '#ef4444', // Rojo (Requiere atención)
+  'En Proceso': '#f59e0b', // Amarillo
+  Ingresada: '#f59e0b', // Amarillo
+  Derivada: '#f59e0b', // Amarillo
+  Finalizada: '#10b981', // Verde
+  Cerrada: '#10b981', // Verde
+};
+
+const COLOR_POR_DEFECTO = '#64748b'; // Slate para otros
 
 export function GraficoBarrasEstado({ datos }: GraficoBarrasEstadoProps) {
   return (
@@ -44,7 +45,7 @@ export function GraficoBarrasEstado({ datos }: GraficoBarrasEstadoProps) {
           <YAxis
             dataKey="estado"
             type="category"
-            tick={{ fontSize: 11, fill: '#9ca3af', fontWeight: 500 }}
+            tick={{ fontSize: 11, fill: '#6b7280', fontWeight: 500 }}
             width={100}
             axisLine={false}
             tickLine={false}
@@ -65,8 +66,11 @@ export function GraficoBarrasEstado({ datos }: GraficoBarrasEstadoProps) {
             background={{ fill: '#f3f4f6', radius: 10 }}
             animationDuration={1500}
           >
-            {datos.map((_, index) => (
-              <Cell key={`cell-${index}`} fill={PALETA_COLORES[index % PALETA_COLORES.length]} />
+            {datos.map((entry, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={COLORES_SEMAFORO[entry.estado] || COLOR_POR_DEFECTO}
+              />
             ))}
           </Bar>
         </BarChart>

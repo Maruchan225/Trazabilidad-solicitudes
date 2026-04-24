@@ -13,7 +13,8 @@ type NombreIcono =
   | 'areas'
   | 'usuarios'
   | 'tipos'
-  | 'reportes';
+  | 'reportes'
+  | 'check';
 
 type IconoProps = {
   nombre: NombreIcono;
@@ -134,6 +135,11 @@ export function Icono({ nombre, className, style }: IconoProps) {
         <path d="M4 19V5" />
         <path d="M20 19H4" />
         <path d="m7 15 3-4 3 2 4-6" />
+      </>,
+    ),
+    check: trazo(
+      <>
+        <path d="M20 6 9 17l-5-5" />
       </>,
     ),
   };

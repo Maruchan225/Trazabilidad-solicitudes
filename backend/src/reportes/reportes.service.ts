@@ -31,6 +31,7 @@ export class ReportesService {
     return {
       totalSolicitudes,
       solicitudesIngresadas: mapaEstados.get(EstadoSolicitud.INGRESADA) ?? 0,
+      solicitudesDerivadas: mapaEstados.get(EstadoSolicitud.DERIVADA) ?? 0,
       solicitudesEnProceso: mapaEstados.get(EstadoSolicitud.EN_PROCESO) ?? 0,
       solicitudesFinalizadas: mapaEstados.get(EstadoSolicitud.FINALIZADA) ?? 0,
       solicitudesCerradas: mapaEstados.get(EstadoSolicitud.CERRADA) ?? 0,
@@ -334,6 +335,11 @@ export class ReportesService {
     return {
       ...where,
       fechaCierre: null,
+      NOT: {
+        estado: {
+          in: [EstadoSolicitud.FINALIZADA, EstadoSolicitud.CERRADA],
+        },
+      },
       fechaVencimiento: {
         lt: new Date(),
       },
@@ -344,6 +350,11 @@ export class ReportesService {
     return {
       ...where,
       fechaCierre: null,
+      NOT: {
+        estado: {
+          in: [EstadoSolicitud.FINALIZADA, EstadoSolicitud.CERRADA],
+        },
+      },
       fechaVencimiento: {
         gte: new Date(),
         lte: this.sumarDias(new Date(), 3),
@@ -354,8 +365,13 @@ export class ReportesService {
   private esSolicitudVencida(solicitud: {
     fechaCierre: Date | null;
     fechaVencimiento: Date;
+    estado: EstadoSolicitud;
   }) {
-    return !solicitud.fechaCierre && solicitud.fechaVencimiento < new Date();
+    const estaTerminada =
+      solicitud.fechaCierre ||
+      solicitud.estado === EstadoSolicitud.FINALIZADA ||
+      solicitud.estado === EstadoSolicitud.CERRADA;
+    return !estaTerminada && solicitud.fechaVencimiento < new Date();
   }
 
   private calcularHorasEntreFechas(inicio: Date, fin: Date) {

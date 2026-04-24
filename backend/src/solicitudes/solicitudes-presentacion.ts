@@ -7,7 +7,9 @@ export type SolicitudPresentable = {
 };
 
 export function estaSolicitudVencida(solicitud: SolicitudPresentable) {
-  return !solicitud.fechaCierre && solicitud.fechaVencimiento.getTime() < Date.now();
+  const estaTerminada =
+    solicitud.fechaCierre || solicitud.estado === EstadoSolicitud.FINALIZADA || solicitud.estado === EstadoSolicitud.CERRADA;
+  return !estaTerminada && solicitud.fechaVencimiento.getTime() < Date.now();
 }
 
 export function presentarSolicitud<T extends SolicitudPresentable>(solicitud: T) {

@@ -11,6 +11,7 @@ export type FiltrosReportes = {
 export type ResumenGeneral = {
   totalSolicitudes: number;
   solicitudesIngresadas: number;
+  solicitudesDerivadas: number;
   solicitudesEnProceso: number;
   solicitudesFinalizadas: number;
   solicitudesCerradas: number;
