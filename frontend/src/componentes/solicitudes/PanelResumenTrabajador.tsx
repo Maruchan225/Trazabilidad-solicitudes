@@ -21,8 +21,8 @@ export function PanelResumenTrabajador({ resumen, loading }: Props) {
   return (
     <div className="mb-6">
       <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}>
-          <Card className="rounded-3xl shadow-sm bg-orange-50/40 border-2 border-orange-200/60">
+        <Col xs={24} sm={12} lg={6}>
+          <Card className="rounded-3xl shadow-sm bg-orange-50/40 border-2 border-orange-200/60 h-full">
             <Statistic
               title={<Text strong className="text-orange-800">Nuevas Asignadas</Text>}
               value={nuevas}
@@ -32,8 +32,8 @@ export function PanelResumenTrabajador({ resumen, loading }: Props) {
             />
           </Card>
         </Col>
-        <Col xs={24} md={8}>
-          <Card className="rounded-3xl shadow-sm bg-marca-50/50 border-2 border-marca-200/60">
+        <Col xs={24} sm={12} lg={6}>
+          <Card className="rounded-3xl shadow-sm bg-marca-50/50 border-2 border-marca-200/60 h-full">
             <Statistic
               title={<Text strong className="text-marca-800">En Proceso</Text>}
               value={enProceso}
@@ -43,14 +43,25 @@ export function PanelResumenTrabajador({ resumen, loading }: Props) {
             />
           </Card>
         </Col>
-        <Col xs={24} md={8}>
-          <Card className="rounded-3xl shadow-sm bg-orange-100/30 border-2 border-orange-300/40">
+        <Col xs={24} sm={12} lg={6}>
+          <Card className="rounded-3xl shadow-sm bg-orange-100/30 border-2 border-orange-300/40 h-full">
             <Statistic
               title={<Text strong className="text-orange-900">Cerradas</Text>}
               value={cerradas}
               loading={loading}
               prefix={<Icono nombre="check" className="text-orange-700 mr-2" />}
               valueStyle={{ color: '#9a3412', fontWeight: 'bold' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card className="rounded-3xl shadow-sm bg-red-100/40 border-2 border-red-300/60 h-full">
+            <Statistic
+              title={<Text strong className="text-red-900">Vencidas</Text>}
+              value={vencidas}
+              loading={loading}
+              prefix={<Icono nombre="alerta" className="text-red-700 mr-2" />}
+              valueStyle={{ color: '#7f1d1d', fontWeight: 'bold' }}
             />
           </Card>
         </Col>
