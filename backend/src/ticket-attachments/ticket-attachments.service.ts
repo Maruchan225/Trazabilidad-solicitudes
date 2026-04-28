@@ -35,7 +35,7 @@ export class TicketAttachmentsService {
     const [ticket, activeUser] = await Promise.all([this.findTicketOrThrow(ticketId), this.prisma.user.findUnique({ where: { id: user.sub } })]);
     if (!activeUser?.enabled) throw new ForbiddenException('User is disabled');
     this.assertCanAccessTicket(ticket, user);
-    if (ticket.status === TicketStatus.CLOSED && !this.isManager(user)) throw new ForbiddenException('Closed tickets cannot receive new attachments');
+    this.assertTicketIsNotClosed(ticket);
 
     const storedFile = this.prepareStoredFile(ticketId, file, dto.storageType ?? StorageType.LOCAL);
 
@@ -86,6 +86,7 @@ export class TicketAttachmentsService {
   async softDeleteAttachment(id: string, user: AuthenticatedUser) {
     const attachment = await this.findAttachmentOrThrow(id);
     this.assertCanAccessTicket(attachment.ticket, user);
+    this.assertTicketIsNotClosed(attachment.ticket);
 
     return this.prisma.$transaction(async (tx) => {
       const deleted = await tx.ticketAttachment.update({
@@ -152,6 +153,10 @@ export class TicketAttachmentsService {
 
   private isManager(user: AuthenticatedUser) {
     return managerRoles.includes(user.role as UserRole);
+  }
+
+  private assertTicketIsNotClosed(ticket: Pick<Ticket, 'status'>) {
+    if (ticket.status === TicketStatus.CLOSED) throw new BadRequestException('Closed tickets cannot be modified');
   }
 
   private attachmentInclude() {

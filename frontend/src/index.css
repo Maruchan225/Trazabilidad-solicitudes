@@ -261,6 +261,23 @@ body {
   height: 300px;
 }
 
+.chart-height-large {
+  height: 360px;
+}
+
+.stacked-chart-scroll {
+  width: 100%;
+  max-height: 520px;
+  overflow-x: auto;
+  overflow-y: scroll;
+  padding-bottom: 4px;
+  scrollbar-gutter: stable;
+}
+
+.report-comparison-card {
+  height: 100%;
+}
+
 .bar-chart {
   display: flex;
   flex-direction: column;

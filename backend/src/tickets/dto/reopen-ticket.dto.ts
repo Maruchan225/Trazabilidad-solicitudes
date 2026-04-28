@@ -1,11 +1,10 @@
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsString, MaxLength, MinLength } from 'class-validator';
 
-export class CreateTicketCommentDto {
+export class ReopenTicketDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  @IsNotEmpty()
   @MinLength(2)
   @MaxLength(1000)
-  content: string;
+  observation: string;
 }

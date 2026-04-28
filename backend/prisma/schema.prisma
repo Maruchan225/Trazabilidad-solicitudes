@@ -125,6 +125,7 @@ model Ticket {
   @@index([ticketTypeId])
   @@index([createdAt])
   @@index([dueDate])
+  @@index([deleted])
   @@index([deleted, createdAt])
 }
 

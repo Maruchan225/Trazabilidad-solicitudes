@@ -1,10 +1,11 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma, TicketStatus, UserRole } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/current-user.decorator';
+import { NEAR_DUE_DAYS } from '../common/constants/sla.constants';
 import { PrismaService } from '../prisma/prisma.service';
 
 const managerRoles: UserRole[] = [UserRole.MANAGER, UserRole.SUBSTITUTE];
-const nearDueDays = 2;
+const terminalStatuses: TicketStatus[] = [TicketStatus.FINISHED, TicketStatus.CLOSED];
 
 @Injectable()
 export class DashboardService {
@@ -167,7 +168,7 @@ export class DashboardService {
   getOverdueCount(where: Prisma.TicketWhereInput = this.baseTicketWhere()) {
     return this.prisma.ticket.count({
       where: {
-        AND: [where, { dueDate: { lt: new Date() }, status: { not: TicketStatus.CLOSED } }]
+        AND: [where, { dueDate: { lt: new Date() }, status: { notIn: terminalStatuses } }]
       }
     });
   }
@@ -175,11 +176,11 @@ export class DashboardService {
   getNearDueCount(where: Prisma.TicketWhereInput = this.baseTicketWhere()) {
     const now = new Date();
     const nearDueLimit = new Date(now);
-    nearDueLimit.setDate(nearDueLimit.getDate() + nearDueDays);
+    nearDueLimit.setDate(nearDueLimit.getDate() + NEAR_DUE_DAYS);
 
     return this.prisma.ticket.count({
       where: {
-        AND: [where, { dueDate: { gte: now, lte: nearDueLimit }, status: { not: TicketStatus.CLOSED } }]
+        AND: [where, { dueDate: { gte: now, lte: nearDueLimit }, status: { notIn: terminalStatuses } }]
       }
     });
   }

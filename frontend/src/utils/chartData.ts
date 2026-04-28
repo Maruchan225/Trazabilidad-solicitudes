@@ -1,46 +1,56 @@
-import type { DashboardData, ReportCount } from '../types/domain';
+import type { DashboardData, ReportCount, TicketStatus, TypeStatusReport } from '../types/domain';
 import { priorityLabels, statusLabels } from '../types/domain';
+import { dueStatusColors, priorityColors, statusColors as ticketStatusColors } from './colors';
 
-export const chartTrafficLightColors = ['#10b981', '#f59e0b', '#ef4444'];
+export const chartTrafficLightColors = [dueStatusColors.onTime, dueStatusColors.nearDue, dueStatusColors.overdue];
 export const chartNeutralColor = '#64748b';
-export const chartBrandColor = '#b5540d';
+export const chartBrandColor = '#60a5fa';
 
-const statusColors: Record<string, string> = {
-  Ingresada: '#f59e0b',
-  Derivada: '#2563eb',
-  'En proceso': '#2563eb',
-  'Pendiente informacion': '#2563eb',
-  'Pend. info': '#2563eb',
-  Finalizada: '#10b981',
-  Cerrada: '#10b981',
-  Vencidas: '#ef4444',
-  Vencida: '#ef4444',
-  'Por vencer': '#f59e0b',
+const statusChartColors: Record<string, string> = {
+  Ingresada: ticketStatusColors.ENTERED,
+  Derivada: ticketStatusColors.DERIVED,
+  'En proceso': ticketStatusColors.IN_PROGRESS,
+  'Pendiente informacion': ticketStatusColors.PENDING_INFORMATION,
+  'Pend. info': ticketStatusColors.PENDING_INFORMATION,
+  Finalizada: ticketStatusColors.FINISHED,
+  Cerrada: ticketStatusColors.CLOSED,
+  Vencidas: dueStatusColors.overdue,
+  Vencida: dueStatusColors.overdue,
+  'Por vencer': dueStatusColors.nearDue,
 };
 
-const priorityColors: Record<string, string> = {
-  Baja: '#10b981',
-  Media: '#f59e0b',
-  Alta: '#ef4444',
-  Urgente: '#ef4444',
+const priorityChartColors: Record<string, string> = {
+  Baja: priorityColors.LOW,
+  Media: priorityColors.MEDIUM,
+  Alta: priorityColors.HIGH,
+  Urgente: priorityColors.URGENT,
 };
 
 export function getDashboardStatusData(dashboard: DashboardData | null) {
   return [
-    { label: 'Ingresadas', value: dashboard?.enteredTickets ?? 0, color: '#f59e0b' },
-    { label: 'Derivadas', value: dashboard?.derivedTickets ?? 0, color: '#2563eb' },
-    { label: 'En proceso', value: dashboard?.inProgressTickets ?? 0, color: '#2563eb' },
-    { label: 'Pend. info', value: dashboard?.pendingInformationTickets ?? 0, color: '#2563eb' },
-    { label: 'Finalizadas', value: dashboard?.finishedTickets ?? 0, color: '#10b981' },
-    { label: 'Cerradas', value: dashboard?.closedTickets ?? 0, color: '#10b981' },
+    { label: 'Ingresadas', value: dashboard?.enteredTickets ?? 0, color: ticketStatusColors.ENTERED },
+    { label: 'Derivadas', value: dashboard?.derivedTickets ?? 0, color: ticketStatusColors.DERIVED },
+    { label: 'En proceso', value: dashboard?.inProgressTickets ?? 0, color: ticketStatusColors.IN_PROGRESS },
+    { label: 'Pend. info', value: dashboard?.pendingInformationTickets ?? 0, color: ticketStatusColors.PENDING_INFORMATION },
+    { label: 'Finalizadas', value: dashboard?.finishedTickets ?? 0, color: ticketStatusColors.FINISHED },
+    { label: 'Cerradas', value: dashboard?.closedTickets ?? 0, color: ticketStatusColors.CLOSED },
   ];
 }
 
 export function getDashboardAlertData(dashboard: DashboardData | null) {
+  const activeTickets =
+    (dashboard?.enteredTickets ?? 0) +
+    (dashboard?.derivedTickets ?? 0) +
+    (dashboard?.inProgressTickets ?? 0) +
+    (dashboard?.pendingInformationTickets ?? 0);
+  const overdueTickets = dashboard?.overdueTickets ?? 0;
+  const nearDueTickets = dashboard?.nearDueTickets ?? 0;
+  const onTimeTickets = Math.max(0, activeTickets - overdueTickets - nearDueTickets);
+
   return [
-    { label: 'Vencidas', value: dashboard?.overdueTickets ?? 0, color: '#ef4444' },
-    { label: 'Por vencer', value: dashboard?.nearDueTickets ?? 0, color: '#f59e0b' },
-    { label: 'Finalizadas', value: dashboard?.finishedTickets ?? 0, color: '#10b981' },
+    { label: 'Vencidas', value: overdueTickets, color: dueStatusColors.overdue },
+    { label: 'Por vencer', value: nearDueTickets, color: dueStatusColors.nearDue },
+    { label: 'Dentro de plazo', value: onTimeTickets, color: dueStatusColors.onTime },
   ];
 }
 
@@ -50,7 +60,7 @@ export function mapStatusReport(rows: ReportCount[]) {
     return {
     label,
     value: row.count,
-    color: statusColors[label] ?? chartNeutralColor,
+    color: statusChartColors[label] ?? chartNeutralColor,
   };
   });
 }
@@ -61,23 +71,39 @@ export function mapPriorityReport(rows: ReportCount[]) {
     return {
     label,
     value: row.count,
-    color: priorityColors[label] ?? chartNeutralColor,
+    color: priorityChartColors[label] ?? chartNeutralColor,
   };
   });
 }
 
 export function mapTypeReport(rows: ReportCount[]) {
-  return rows.map((row, index) => ({
+  return rows.map((row) => ({
     label: row.ticketType?.name ?? row.ticketTypeId ?? '-',
     value: row.count,
-    color: chartTrafficLightColors[index % chartTrafficLightColors.length],
+    color: chartBrandColor,
   }));
 }
 
 export function mapWorkloadReport(rows: ReportCount[]) {
-  return rows.map((row, index) => ({
+  return rows.map((row) => ({
     label: row.worker?.name ?? row.assignedToId ?? '-',
     value: row.count,
-    color: chartTrafficLightColors[index % chartTrafficLightColors.length],
+    color: chartBrandColor,
+  }));
+}
+
+export const typeStatusStackKeys: Array<{ key: TicketStatus; label: string; color: string }> = [
+  { key: 'ENTERED', label: statusLabels.ENTERED, color: ticketStatusColors.ENTERED },
+  { key: 'DERIVED', label: statusLabels.DERIVED, color: ticketStatusColors.DERIVED },
+  { key: 'IN_PROGRESS', label: statusLabels.IN_PROGRESS, color: ticketStatusColors.IN_PROGRESS },
+  { key: 'PENDING_INFORMATION', label: 'Pend. informacion', color: ticketStatusColors.PENDING_INFORMATION },
+  { key: 'FINISHED', label: statusLabels.FINISHED, color: ticketStatusColors.FINISHED },
+  { key: 'CLOSED', label: statusLabels.CLOSED, color: ticketStatusColors.CLOSED },
+];
+
+export function mapTypeStatusReport(rows: TypeStatusReport[]) {
+  return rows.map((row) => ({
+    label: row.ticketType.name,
+    ...row.counts,
   }));
 }

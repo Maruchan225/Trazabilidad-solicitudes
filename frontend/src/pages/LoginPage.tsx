@@ -32,7 +32,7 @@ export function LoginPage() {
           Trazabilidad DOM
         </Typography.Title>
         <Typography.Paragraph type="secondary">Ingrese con sus credenciales institucionales.</Typography.Paragraph>
-        <Form layout="vertical" onFinish={handleSubmit} initialValues={{ email: 'manager@demo.cl', password: 'Demo1234!' }}>
+        <Form layout="vertical" onFinish={handleSubmit} initialValues={{ email: 'encargado@demo.cl', password: '11223344' }}>
           <Form.Item name="email" label="Correo" rules={[{ required: true, type: 'email', message: 'Ingrese un correo valido' }]}>
             <Input autoComplete="email" />
           </Form.Item>

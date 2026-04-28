@@ -7,6 +7,7 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { ChangeTicketStatusDto } from './dto/change-ticket-status.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { DeriveTicketDto } from './dto/derive-ticket.dto';
+import { ReopenTicketDto } from './dto/reopen-ticket.dto';
 import { TicketFiltersDto } from './dto/ticket-filters.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 
@@ -82,7 +83,7 @@ export class TicketsService {
       this.prisma.ticket.findMany({
         where,
         select: this.ticketListSelect(),
-        orderBy: { createdAt: 'desc' },
+        orderBy: this.buildTicketOrderBy(filters),
         skip: (page - 1) * pageSize,
         take: pageSize
       }),
@@ -133,6 +134,7 @@ export class TicketsService {
   async assignTicket(id: string, dto: AssignTicketDto, user: AuthenticatedUser) {
     this.assertManager(user);
     const [ticket, assignee] = await Promise.all([this.findRawTicket(id), this.prisma.user.findUnique({ where: { id: dto.assignedToId } })]);
+    this.assertTicketIsNotClosed(ticket);
     if (!assignee?.enabled) throw new BadRequestException('Assignee must be active');
 
     return this.prisma.$transaction(async (tx) => {
@@ -154,6 +156,7 @@ export class TicketsService {
   async deriveTicket(id: string, dto: DeriveTicketDto, user: AuthenticatedUser) {
     this.assertManager(user);
     const [ticket, assignee] = await Promise.all([this.findRawTicket(id), this.prisma.user.findUnique({ where: { id: dto.toUserId } })]);
+    this.assertTicketIsNotClosed(ticket);
     if (!assignee?.enabled) throw new BadRequestException('Target user must be active');
 
     return this.prisma.$transaction(async (tx) => {
@@ -188,14 +191,22 @@ export class TicketsService {
 
   async changeTicketStatus(id: string, dto: ChangeTicketStatusDto, user: AuthenticatedUser) {
     const ticket = await this.findRawTicket(id);
-    if (ticket.status === TicketStatus.CLOSED && dto.status !== TicketStatus.CLOSED) throw new BadRequestException('Closed tickets cannot change status');
+    if (ticket.status === TicketStatus.CLOSED) throw new BadRequestException('Closed tickets cannot change status');
+    if (ticket.status === TicketStatus.FINISHED && dto.status !== TicketStatus.FINISHED && dto.status !== TicketStatus.CLOSED) throw new BadRequestException('Finished tickets must be closed or reopened');
+    if (dto.status === TicketStatus.CLOSED && ticket.status !== TicketStatus.FINISHED) throw new BadRequestException('Tickets must be finished before closing');
     if (dto.status === TicketStatus.CLOSED && !managerRoles.includes(user.role as UserRole)) throw new ForbiddenException('Workers cannot close tickets');
     if (user.role === UserRole.WORKER && ticket.assignedToId !== user.sub) throw new ForbiddenException('Workers can only update assigned tickets');
-    if (ticket.status === TicketStatus.CLOSED && !managerRoles.includes(user.role as UserRole)) throw new ForbiddenException('Closed tickets can only be edited by authorized users');
 
     const data: Prisma.TicketUpdateInput = { status: dto.status };
     if (dto.status === TicketStatus.FINISHED) data.finishedAt = new Date();
-    if (dto.status === TicketStatus.CLOSED) Object.assign(data, { closedAt: new Date(), closedBy: { connect: { id: user.sub } } });
+    if (dto.status === TicketStatus.CLOSED) {
+      const closedAt = new Date();
+      Object.assign(data, {
+        closedAt,
+        finishedAt: ticket.finishedAt ?? closedAt,
+        closedBy: { connect: { id: user.sub } },
+      });
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.ticket.update({ where: { id }, data });
@@ -222,6 +233,32 @@ export class TicketsService {
     return this.changeTicketStatus(id, { status: TicketStatus.CLOSED }, user);
   }
 
+  async reopenTicket(id: string, dto: ReopenTicketDto, user: AuthenticatedUser) {
+    this.assertManager(user);
+    const ticket = await this.findRawTicket(id);
+    if (ticket.status !== TicketStatus.FINISHED) throw new BadRequestException('Only finished tickets can be reopened');
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.ticket.update({
+        where: { id },
+        data: { status: TicketStatus.IN_PROGRESS, finishedAt: null },
+      });
+
+      await this.createHistoryEntry(tx, {
+        ticketId: id,
+        userId: user.sub,
+        action: TicketHistoryAction.REOPENED,
+        previousStatus: ticket.status,
+        newStatus: updated.status,
+        previousAssigneeId: ticket.assignedToId,
+        newAssigneeId: updated.assignedToId,
+        details: { observation: dto.observation },
+      });
+
+      return updated;
+    });
+  }
+
   async getTicketHistory(id: string, user: AuthenticatedUser) {
     await this.findTicketById(id, user);
     return this.prisma.ticketHistory.findMany({
@@ -233,19 +270,27 @@ export class TicketsService {
 
   private buildTicketWhere(filters: TicketFiltersDto): Prisma.TicketWhereInput {
     const andConditions: Prisma.TicketWhereInput[] = [];
+    const trayStatusFilter = this.getTrayStatusFilter(filters.tray);
     const where: Prisma.TicketWhereInput = {
       deleted: false,
-      status: filters.status,
+      status: trayStatusFilter ?? filters.status,
       priority: filters.priority,
       ticketTypeId: filters.ticketTypeId,
       assignedToId: filters.assignedToId,
+      assignedTo: filters.assignedToRut ? { rut: { contains: this.formatRut(filters.assignedToRut), mode: 'insensitive' } } : undefined,
       inputChannel: filters.inputChannel,
       code: filters.code ? { contains: filters.code, mode: 'insensitive' } : undefined,
       createdAt: filters.fromDate || filters.toDate ? { gte: filters.fromDate ? new Date(filters.fromDate) : undefined, lte: filters.toDate ? new Date(filters.toDate) : undefined } : undefined
     };
 
+    if (trayStatusFilter && filters.status) {
+      andConditions.push({ status: trayStatusFilter }, { status: filters.status });
+      delete where.status;
+    }
+
     const search = filters.search?.trim();
     if (search) {
+      const formattedRutSearch = this.formatRut(search);
       andConditions.push({
         OR: [
           { code: { contains: search, mode: 'insensitive' } },
@@ -253,7 +298,8 @@ export class TicketsService {
           { description: { contains: search, mode: 'insensitive' } },
           { ticketType: { name: { contains: search, mode: 'insensitive' } } },
           { assignedTo: { name: { contains: search, mode: 'insensitive' } } },
-          { assignedTo: { email: { contains: search, mode: 'insensitive' } } }
+          { assignedTo: { email: { contains: search, mode: 'insensitive' } } },
+          { assignedTo: { rut: { contains: formattedRutSearch, mode: 'insensitive' } } }
         ]
       });
     }
@@ -268,9 +314,38 @@ export class TicketsService {
     return where;
   }
 
+  private getTrayStatusFilter(tray?: TicketFiltersDto['tray']): Prisma.EnumTicketStatusFilter | TicketStatus | undefined {
+    if (!tray || tray === 'all') return undefined;
+    if (tray === 'inbox') return TicketStatus.ENTERED;
+    if (tray === 'active') return { in: [TicketStatus.DERIVED, TicketStatus.IN_PROGRESS, TicketStatus.PENDING_INFORMATION] };
+    if (tray === 'review') return TicketStatus.FINISHED;
+    if (tray === 'closed') return TicketStatus.CLOSED;
+    return undefined;
+  }
+
+  private formatRut(rut: string) {
+    const cleanRut = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+    if (cleanRut.length < 2) return cleanRut;
+
+    const body = cleanRut.slice(0, -1);
+    const verifier = cleanRut.slice(-1);
+    const formattedBody = body.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${formattedBody}-${verifier}`;
+  }
+
+  private buildTicketOrderBy(filters: TicketFiltersDto): Prisma.TicketOrderByWithRelationInput[] {
+    const dateOrder: Prisma.TicketOrderByWithRelationInput = filters.sortBy && filters.sortOrder ? { [filters.sortBy]: filters.sortOrder } : { createdAt: 'desc' };
+
+    return [
+      { closedAt: 'desc' },
+      dateOrder,
+      { createdAt: 'desc' },
+    ];
+  }
+
   private async findEditableTicket(id: string, user: AuthenticatedUser) {
     const ticket = await this.findRawTicket(id);
-    if (ticket.status === TicketStatus.CLOSED && !managerRoles.includes(user.role as UserRole)) throw new ForbiddenException('Closed tickets can only be edited by authorized users');
+    this.assertTicketIsNotClosed(ticket);
     if (user.role === UserRole.WORKER && ticket.assignedToId !== user.sub) throw new ForbiddenException('Workers can only edit assigned tickets');
     return ticket;
   }
@@ -283,6 +358,10 @@ export class TicketsService {
 
   private assertManager(user: AuthenticatedUser) {
     if (!managerRoles.includes(user.role as UserRole)) throw new ForbiddenException('Manager permissions are required');
+  }
+
+  private assertTicketIsNotClosed(ticket: Pick<Ticket, 'status'>) {
+    if (ticket.status === TicketStatus.CLOSED) throw new BadRequestException('Closed tickets cannot be modified');
   }
 
   private ticketInclude() {

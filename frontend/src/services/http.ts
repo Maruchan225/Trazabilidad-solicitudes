@@ -1,4 +1,4 @@
-import { getStoredToken } from './sessionStorage';
+import { clearStoredSession, getStoredToken } from './sessionStorage';
 
 export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
@@ -47,6 +47,10 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
 
   if (!response.ok) {
     const payload = await response.json().catch(async () => response.text().catch(() => null));
+    if (response.status === 401 && path !== '/auth/login') {
+      clearStoredSession();
+      if (typeof window !== 'undefined') window.location.assign('/login');
+    }
     throw new ApiError(getErrorMessage(payload), response.status);
   }
 

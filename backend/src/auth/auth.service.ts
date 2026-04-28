@@ -5,6 +5,7 @@ import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AuthenticatedUser } from './current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { getJwtExpiresIn } from '../config/environment';
 import { LoginDto } from './dto/login.dto';
 
 @Injectable()
@@ -14,7 +15,7 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.validateUser(dto.email, dto.password);
     const payload = { sub: user.id, email: user.email, role: user.role };
-    const accessToken = await this.jwtService.signAsync(payload, { expiresIn: (this.configService.get<string>('JWT_EXPIRES_IN') ?? '8h') as never });
+    const accessToken = await this.jwtService.signAsync(payload, { expiresIn: getJwtExpiresIn(this.configService) as never });
 
     return { accessToken, user: this.sanitizeUser(user) };
   }

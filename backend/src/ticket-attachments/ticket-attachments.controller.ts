@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { mkdirSync } from 'node:fs';
@@ -10,6 +10,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { UploadTicketAttachmentDto } from './dto/upload-ticket-attachment.dto';
 import { TicketAttachmentsService, UploadedTicketFile } from './ticket-attachments.service';
 
+const maxAttachmentSizeBytes = 10 * 1024 * 1024;
+const allowedAttachmentMimeTypes = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+const allowedAttachmentExtensions = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class TicketAttachmentsController {
@@ -18,9 +22,22 @@ export class TicketAttachmentsController {
   @Post('tickets/:ticketId/attachments')
   @UseInterceptors(
     FileInterceptor('file', {
+      limits: { fileSize: maxAttachmentSizeBytes },
+      fileFilter: (_request, file: UploadedTicketFile, callback) => {
+        const extension = extname(file.originalname).toLowerCase();
+        if (!allowedAttachmentMimeTypes.has(file.mimetype) || !allowedAttachmentExtensions.has(extension)) {
+          callback(new BadRequestException('Only PDF, JPG and PNG files are allowed'), false);
+          return;
+        }
+        callback(null, true);
+      },
       storage: diskStorage({
         destination: (request: Request, _file: UploadedTicketFile, callback: (error: Error | null, destination: string) => void) => {
           const ticketId = String(request.params.ticketId);
+          if (!/^[A-Za-z0-9_-]+$/.test(ticketId)) {
+            callback(new BadRequestException('Invalid ticket id'), '');
+            return;
+          }
           const destination = join(process.cwd(), 'uploads', 'tickets', ticketId);
           mkdirSync(destination, { recursive: true });
           callback(null, destination);

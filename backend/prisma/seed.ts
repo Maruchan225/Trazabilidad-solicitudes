@@ -3,10 +3,26 @@ import { InputChannel, PrismaClient, Priority, TicketHistoryAction, TicketStatus
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 
+function assertDestructiveSeedAllowed() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('The demo seed is disabled in production. Restore from backups or use migrations instead.');
+  }
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is required to run the seed.');
+  }
+  if (process.env.ALLOW_DESTRUCTIVE_SEED !== 'true') {
+    throw new Error('This seed deletes and recreates demo data. Set ALLOW_DESTRUCTIVE_SEED=true to run it intentionally.');
+  }
+}
+
+assertDestructiveSeedAllowed();
+
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-const password = 'Demo1234!';
+const password = '11223344';
+const totalTickets = 3000;
+const featuredWorkerEmail = 'trabajador.uno@demo.cl';
 
 const ticketTypeSeeds = [
   { name: 'Certificado de regularizacion', description: 'Solicitudes de certificados DOM y regularizacion.', slaDays: 5 },
@@ -34,7 +50,26 @@ const descriptionPool = [
   'Caso de ejemplo con antecedentes pendientes de revision tecnica.',
   'Registro de prueba para validar filtros, reportes y carga por trabajador.',
   'Solicitud ingresada por canal institucional para seguimiento interno.',
+  'Expediente con observaciones de planimetria y antecedentes municipales.',
+  'Requerimiento urgente asociado a una visita tecnica pendiente.',
+  'Solicitud con documentacion completa y seguimiento administrativo.',
+  'Caso ciudadano con plazo controlado y prioridad de regularizacion.',
 ];
+
+const requesterNames = [
+  'Camila Rojas',
+  'Felipe Munoz',
+  'Valentina Soto',
+  'Jorge Herrera',
+  'Daniela Vega',
+  'Matias Contreras',
+  'Paula Fuentes',
+  'Rodrigo Silva',
+  'Fernanda Araya',
+  'Cristian Morales',
+];
+
+const requesterDomains = ['correo.cl', 'municipio.cl', 'vecinos.cl', 'empresa.cl'];
 
 function seededRut(index: number) {
   const base = 10_000_000 + index;
@@ -51,21 +86,70 @@ function pick<T>(items: T[], index: number) {
   return items[index % items.length];
 }
 
+function weightedPick<T>(items: T[], index: number) {
+  return items[(index * 7 + Math.floor(index / 3)) % items.length];
+}
+
+function isTerminalStatus(status: TicketStatus) {
+  return status === TicketStatus.FINISHED || status === TicketStatus.CLOSED;
+}
+
+function buildTicketDates(now: Date, status: TicketStatus, appliedSlaDays: number, index: number) {
+  const ageDays = Math.max(0, Math.min(appliedSlaDays - 1, weightedPick([0, 1, 2, 3, 4, 6, 8, 10, 12], index)));
+  const createdAt = addDays(now, -ageDays);
+  const dueDate = addDays(createdAt, appliedSlaDays);
+
+  if (!isTerminalStatus(status)) {
+    return { createdAt, dueDate, finishedAt: null, closedAt: null };
+  }
+
+  const finishAgeDays = Math.max(0, Math.min(ageDays, weightedPick([0, 1, 2, 3, 5], index)));
+  const finishedAt = addDays(now, -finishAgeDays);
+  const closeDelayDays = weightedPick([0, 0, 1, 2], index);
+  const proposedClosedAt = addDays(finishedAt, closeDelayDays);
+  const closedAt = status === TicketStatus.CLOSED ? (proposedClosedAt > now ? now : proposedClosedAt) : null;
+  return { createdAt, dueDate, finishedAt, closedAt };
+}
+
+function workerWeight(position: number) {
+  if (position === 0) return 170;
+  if (position === 1) return 130;
+  if (position === 2) return 105;
+  if (position === 3) return 82;
+  if (position < 10) return 52 - position;
+  if (position < 25) return 28 - Math.floor(position / 3);
+  if (position < 55) return 12 - (position % 4);
+  return 3 + (position % 3);
+}
+
+function buildWorkerPool(workers: Awaited<ReturnType<typeof seedUsers>>) {
+  return workers.flatMap((worker, position) => Array.from({ length: workerWeight(position) }, () => worker));
+}
+
+async function clearExistingData() {
+  await prisma.ticketAttachment.deleteMany();
+  await prisma.ticketComment.deleteMany();
+  await prisma.ticketDerivation.deleteMany();
+  await prisma.ticketHistory.deleteMany();
+  await prisma.ticket.deleteMany();
+  await prisma.user.deleteMany();
+}
+
 async function seedUsers(passwordHash: string) {
   const fixedUsers = [
-    { name: 'Manager Demo', rut: '11.111.111-1', email: 'manager@demo.cl', role: UserRole.MANAGER },
-    { name: 'Substitute Demo', rut: '22.222.222-2', email: 'substitute@demo.cl', role: UserRole.SUBSTITUTE },
-    { name: 'Worker One', rut: '33.333.333-3', email: 'worker.one@demo.cl', role: UserRole.WORKER },
-    { name: 'Worker Two', rut: '44.444.444-4', email: 'worker.two@demo.cl', role: UserRole.WORKER },
+    { name: 'Encargado Demo', rut: '11.111.111-1', email: 'encargado@demo.cl', role: UserRole.MANAGER },
+    { name: 'Subrogante Demo', rut: '22.222.222-2', email: 'subrogante@demo.cl', role: UserRole.SUBSTITUTE },
+    { name: 'Trabajador Uno', rut: '33.333.333-3', email: featuredWorkerEmail, role: UserRole.WORKER },
+    { name: 'Trabajador Dos', rut: '44.444.444-4', email: 'trabajador.dos@demo.cl', role: UserRole.WORKER },
   ];
 
   const generatedUsers = Array.from({ length: 96 }, (_, index) => {
     const number = index + 5;
     const role = number <= 8 ? UserRole.SUBSTITUTE : UserRole.WORKER;
     return {
-      name: role === UserRole.WORKER ? `Worker Demo ${String(number).padStart(3, '0')}` : `Substitute Demo ${String(number).padStart(3, '0')}`,
+      name: role === UserRole.WORKER ? `Trabajador Demo ${String(number).padStart(3, '0')}` : `Subrogante Demo ${String(number).padStart(3, '0')}`,
       rut: seededRut(number),
-      email: role === UserRole.WORKER ? `worker.${String(number).padStart(3, '0')}@demo.cl` : `substitute.${String(number).padStart(3, '0')}@demo.cl`,
+      email: role === UserRole.WORKER ? `trabajador.${String(number).padStart(3, '0')}@demo.cl` : `subrogante.${String(number).padStart(3, '0')}@demo.cl`,
       role,
     };
   });
@@ -73,11 +157,18 @@ async function seedUsers(passwordHash: string) {
   const users = [...fixedUsers, ...generatedUsers];
 
   for (const user of users) {
-    await prisma.user.upsert({
-      where: { email: user.email },
-      update: { name: user.name, rut: user.rut, role: user.role, enabled: true },
-      create: { ...user, passwordHash, enabled: true },
+    const existingUser = await prisma.user.findFirst({
+      where: { OR: [{ email: user.email }, { rut: user.rut }] },
     });
+
+    if (existingUser) {
+      await prisma.user.update({
+        where: { id: existingUser.id },
+        data: { ...user, passwordHash, enabled: true },
+      });
+    } else {
+      await prisma.user.create({ data: { ...user, passwordHash, enabled: true } });
+    }
   }
 
   return prisma.user.findMany({ where: { email: { in: users.map((user) => user.email) } }, orderBy: { email: 'asc' } });
@@ -101,45 +192,47 @@ async function seedTicketTypes() {
 }
 
 async function seedTickets(users: Awaited<ReturnType<typeof seedUsers>>, ticketTypes: Awaited<ReturnType<typeof seedTicketTypes>>) {
-  const manager = users.find((user) => user.email === 'manager@demo.cl') ?? users[0];
+  const manager = users.find((user) => user.email === 'encargado@demo.cl') ?? users[0];
   const workers = users.filter((user) => user.role === UserRole.WORKER);
+  const workerPool = buildWorkerPool(workers);
   const statuses = [
     TicketStatus.ENTERED,
+    TicketStatus.ENTERED,
+    TicketStatus.DERIVED,
     TicketStatus.DERIVED,
     TicketStatus.IN_PROGRESS,
+    TicketStatus.IN_PROGRESS,
+    TicketStatus.IN_PROGRESS,
+    TicketStatus.PENDING_INFORMATION,
     TicketStatus.PENDING_INFORMATION,
     TicketStatus.FINISHED,
     TicketStatus.CLOSED,
   ];
-  const priorities = [Priority.LOW, Priority.MEDIUM, Priority.HIGH, Priority.URGENT];
-  const channels = [InputChannel.EMAIL, InputChannel.IN_PERSON];
+  const priorities = [Priority.LOW, Priority.MEDIUM, Priority.MEDIUM, Priority.HIGH, Priority.HIGH, Priority.URGENT];
+  const channels = [InputChannel.EMAIL, InputChannel.EMAIL, InputChannel.IN_PERSON];
+  const slaAdjustments = [-4, -2, 0, 0, 1, 3, 5];
   const now = new Date();
-  const seedCodes = Array.from({ length: 100 }, (_, index) => `DOM-${String(index + 1).padStart(4, '0')}`);
 
-  await prisma.ticket.updateMany({
-    where: {
-      OR: [{ code: null }, { code: { notIn: seedCodes } }],
-    },
-    data: { deleted: true, enabled: false },
-  });
-
-  for (let index = 1; index <= 100; index += 1) {
-    const ticketType = pick(ticketTypes, index);
-    const assignedTo = pick(workers, index);
-    const status = pick(statuses, index);
-    const priority = pick(priorities, index);
-    const inputChannel = pick(channels, index);
-    const createdAt = addDays(now, -index);
-    const dueDate = addDays(createdAt, ticketType.slaDays);
-    const finishedAt = status === TicketStatus.FINISHED || status === TicketStatus.CLOSED ? addDays(createdAt, Math.max(1, ticketType.slaDays - 1)) : null;
-    const closedAt = status === TicketStatus.CLOSED ? addDays(createdAt, ticketType.slaDays) : null;
+  for (let index = 1; index <= totalTickets; index += 1) {
+    const ticketType = weightedPick(ticketTypes, index);
+    const assignedTo = weightedPick(workerPool, index);
+    const status = weightedPick(statuses, index);
+    const priority = weightedPick(priorities, index);
+    const inputChannel = weightedPick(channels, index);
+    const appliedSlaDays = Math.max(1, ticketType.slaDays + weightedPick(slaAdjustments, index));
+    const { createdAt, dueDate, finishedAt, closedAt } = buildTicketDates(now, status, appliedSlaDays, index);
+    const requesterName = pick(requesterNames, index);
+    const requesterEmail = `${requesterName.toLowerCase().replace(/\s+/g, '.')}@${pick(requesterDomains, index)}`;
+    const requesterPhone = `+569${String(7_000_0000 + index).slice(-8)}`;
     const code = `DOM-${String(index).padStart(4, '0')}`;
+    const title = `${pick(titlePool, index)} ${String(index).padStart(4, '0')}`;
+    const description = `${pick(descriptionPool, index)} Prioridad ${priority.toLowerCase()} y estado ${status.toLowerCase()}.`;
 
     const ticket = await prisma.ticket.upsert({
       where: { code },
       update: {
-        title: `${pick(titlePool, index)} ${String(index).padStart(3, '0')}`,
-        description: pick(descriptionPool, index),
+        title,
+        description,
         priority,
         status,
         inputChannel,
@@ -147,17 +240,21 @@ async function seedTickets(users: Awaited<ReturnType<typeof seedUsers>>, ticketT
         assignedToId: assignedTo.id,
         createdById: manager.id,
         closedById: status === TicketStatus.CLOSED ? manager.id : null,
-        appliedSlaDays: ticketType.slaDays,
+        requesterName,
+        requesterEmail,
+        requesterPhone,
+        appliedSlaDays,
         dueDate,
         finishedAt,
         closedAt,
+        createdAt,
         enabled: true,
         deleted: false,
       },
       create: {
         code,
-        title: `${pick(titlePool, index)} ${String(index).padStart(3, '0')}`,
-        description: pick(descriptionPool, index),
+        title,
+        description,
         priority,
         status,
         inputChannel,
@@ -165,7 +262,10 @@ async function seedTickets(users: Awaited<ReturnType<typeof seedUsers>>, ticketT
         assignedToId: assignedTo.id,
         createdById: manager.id,
         closedById: status === TicketStatus.CLOSED ? manager.id : null,
-        appliedSlaDays: ticketType.slaDays,
+        requesterName,
+        requesterEmail,
+        requesterPhone,
+        appliedSlaDays,
         dueDate,
         finishedAt,
         closedAt,
@@ -195,6 +295,7 @@ async function seedTickets(users: Awaited<ReturnType<typeof seedUsers>>, ticketT
 
 async function main() {
   const passwordHash = await bcrypt.hash(password, 10);
+  await clearExistingData();
   const [users, ticketTypes] = await Promise.all([seedUsers(passwordHash), seedTicketTypes()]);
   await seedTickets(users, ticketTypes);
 
@@ -205,7 +306,8 @@ async function main() {
   ]);
 
   console.log(`Seed completed: ${userCount} users, ${ticketTypeCount} active ticket types, ${ticketCount} tickets.`);
-  console.log(`Login: manager@demo.cl / ${password}`);
+  console.log(`Login: encargado@demo.cl / ${password}`);
+  console.log(`Generated ${totalTickets} non-overdue tickets with irregular worker workload.`);
 }
 
 main().finally(async () => prisma.$disconnect());

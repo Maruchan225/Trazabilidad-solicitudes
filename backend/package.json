@@ -5,11 +5,14 @@
   "scripts": {
     "build": "nest build",
     "start": "node dist/src/main.js",
+    "start:prod": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "lint": "eslint \"src/**/*.ts\"",
     "seed": "tsx prisma/seed.ts",
+    "seed:safe": "tsx prisma/seed.ts",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

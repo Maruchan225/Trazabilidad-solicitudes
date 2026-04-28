@@ -1,13 +1,17 @@
 import { UserRole } from '@prisma/client';
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateUserDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   name: string;
 
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   rut: string;
 
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail()
   email: string;
 
@@ -19,5 +23,6 @@ export class CreateUserDto {
   role: UserRole;
 
   @IsOptional()
+  @IsBoolean()
   enabled?: boolean;
 }

@@ -18,9 +18,9 @@ export function MainLayout() {
   const items: MenuProps['items'] = [
     { key: '/dashboard', icon: <Icon name="dashboard" />, label: 'Dashboard' },
     { key: '/tickets', icon: <Icon name="tickets" />, label: 'Solicitudes' },
-    { key: '/ticket-types', icon: <Icon name="ticketTypes" />, label: 'Tipos de solicitud' },
     ...(canManage
       ? [
+          { key: '/ticket-types', icon: <Icon name="ticketTypes" />, label: 'Tipos de solicitud' },
           { key: '/users', icon: <Icon name="users" />, label: 'Usuarios' },
           { key: '/reports', icon: <Icon name="reports" />, label: 'Reportes' },
         ]

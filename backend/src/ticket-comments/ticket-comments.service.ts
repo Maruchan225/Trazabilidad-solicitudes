@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Ticket, TicketHistoryAction, TicketStatus, UserRole } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,7 +15,7 @@ export class TicketCommentsService {
     const [ticket, activeUser] = await Promise.all([this.findTicketOrThrow(ticketId), this.prisma.user.findUnique({ where: { id: user.sub } })]);
     if (!activeUser?.enabled) throw new ForbiddenException('User is disabled');
     this.assertCanAccessTicket(ticket, user);
-    if (ticket.status === TicketStatus.CLOSED && !this.isManager(user)) throw new ForbiddenException('Closed tickets cannot receive new comments');
+    this.assertTicketIsNotClosed(ticket);
 
     return this.prisma.$transaction(async (tx) => {
       const comment = await tx.ticketComment.create({
@@ -54,6 +54,7 @@ export class TicketCommentsService {
   async updateComment(id: string, dto: UpdateTicketCommentDto, user: AuthenticatedUser) {
     const comment = await this.findCommentOrThrow(id);
     this.assertCanAccessTicket(comment.ticket, user);
+    this.assertTicketIsNotClosed(comment.ticket);
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.ticketComment.update({
@@ -84,6 +85,7 @@ export class TicketCommentsService {
   async softDeleteComment(id: string, user: AuthenticatedUser) {
     const comment = await this.findCommentOrThrow(id);
     this.assertCanAccessTicket(comment.ticket, user);
+    this.assertTicketIsNotClosed(comment.ticket);
 
     return this.prisma.$transaction(async (tx) => {
       const deleted = await tx.ticketComment.update({
@@ -132,6 +134,10 @@ export class TicketCommentsService {
 
   private isManager(user: AuthenticatedUser) {
     return managerRoles.includes(user.role as UserRole);
+  }
+
+  private assertTicketIsNotClosed(ticket: Pick<Ticket, 'status'>) {
+    if (ticket.status === TicketStatus.CLOSED) throw new BadRequestException('Closed tickets cannot be modified');
   }
 
   private commentInclude() {

@@ -42,6 +42,11 @@ export class ReportsController {
     return this.reportsService.getTicketsByType(filters);
   }
 
+  @Get('tickets-by-type-and-status')
+  getTicketsByTypeAndStatus(@Query() filters: ReportFiltersDto) {
+    return this.reportsService.getTicketsByTypeAndStatus(filters);
+  }
+
   @Get('tickets-by-priority')
   getTicketsByPriority(@Query() filters: ReportFiltersDto) {
     return this.reportsService.getTicketsByPriority(filters);

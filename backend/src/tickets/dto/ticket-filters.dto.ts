@@ -1,6 +1,6 @@
 import { InputChannel, Priority, TicketStatus } from '@prisma/client';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class TicketFiltersDto {
   @IsOptional()
@@ -21,6 +21,10 @@ export class TicketFiltersDto {
   search?: string;
 
   @IsOptional()
+  @IsIn(['inbox', 'active', 'review', 'closed', 'all'])
+  tray?: 'inbox' | 'active' | 'review' | 'closed' | 'all';
+
+  @IsOptional()
   @IsEnum(TicketStatus)
   status?: TicketStatus;
 
@@ -37,6 +41,10 @@ export class TicketFiltersDto {
   assignedToId?: string;
 
   @IsOptional()
+  @IsString()
+  assignedToRut?: string;
+
+  @IsOptional()
   @IsEnum(InputChannel)
   inputChannel?: InputChannel;
 
@@ -51,6 +59,14 @@ export class TicketFiltersDto {
   @IsOptional()
   @IsDateString()
   toDate?: string;
+
+  @IsOptional()
+  @IsIn(['createdAt', 'dueDate'])
+  sortBy?: 'createdAt' | 'dueDate';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 
   @IsOptional()
   @Transform(({ value }) => value === true || value === 'true')

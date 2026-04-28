@@ -1,9 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, TicketStatus } from '@prisma/client';
+import { NEAR_DUE_DAYS } from '../common/constants/sla.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReportFiltersDto } from './dto/report-filters.dto';
 
-const nearDueDays = 2;
+const terminalStatuses: TicketStatus[] = [TicketStatus.FINISHED, TicketStatus.CLOSED];
+const ticketStatuses: TicketStatus[] = [
+  TicketStatus.ENTERED,
+  TicketStatus.DERIVED,
+  TicketStatus.IN_PROGRESS,
+  TicketStatus.PENDING_INFORMATION,
+  TicketStatus.FINISHED,
+  TicketStatus.CLOSED
+];
 
 @Injectable()
 export class ReportsService {
@@ -12,7 +21,7 @@ export class ReportsService {
   getOverdueTickets(filters: ReportFiltersDto) {
     return this.prisma.ticket.findMany({
       where: {
-        AND: [this.buildBaseWhere(filters), { dueDate: { lt: new Date() }, status: { not: TicketStatus.CLOSED } }]
+        AND: [this.buildBaseWhere(filters), { dueDate: { lt: new Date() }, status: { notIn: terminalStatuses } }]
       },
       include: this.ticketInclude(),
       orderBy: { dueDate: 'asc' }
@@ -22,11 +31,11 @@ export class ReportsService {
   getNearDueTickets(filters: ReportFiltersDto) {
     const now = new Date();
     const nearDueLimit = new Date(now);
-    nearDueLimit.setDate(nearDueLimit.getDate() + nearDueDays);
+    nearDueLimit.setDate(nearDueLimit.getDate() + NEAR_DUE_DAYS);
 
     return this.prisma.ticket.findMany({
       where: {
-        AND: [this.buildBaseWhere(filters), { dueDate: { gte: now, lte: nearDueLimit }, status: { not: TicketStatus.CLOSED } }]
+        AND: [this.buildBaseWhere(filters), { dueDate: { gte: now, lte: nearDueLimit }, status: { notIn: terminalStatuses } }]
       },
       include: this.ticketInclude(),
       orderBy: { dueDate: 'asc' }
@@ -99,23 +108,52 @@ export class ReportsService {
   }
 
   async getTicketsByType(filters: ReportFiltersDto) {
-    const rows = await this.prisma.ticket.groupBy({
-      by: ['ticketTypeId'],
-      where: this.buildBaseWhere(filters),
-      _count: { _all: true },
-      orderBy: { ticketTypeId: 'asc' }
-    });
+    const [rows, ticketTypes] = await Promise.all([
+      this.prisma.ticket.groupBy({
+        by: ['ticketTypeId'],
+        where: this.buildBaseWhere(filters),
+        _count: { _all: true },
+        orderBy: { ticketTypeId: 'asc' }
+      }),
+      this.prisma.ticketType.findMany({
+        where: filters.ticketTypeId ? { id: filters.ticketTypeId } : undefined,
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' }
+      })
+    ]);
 
-    const ticketTypes = await this.prisma.ticketType.findMany({
-      where: { id: { in: rows.map((row) => row.ticketTypeId) } },
-      select: { id: true, name: true }
-    });
-    const ticketTypesById = new Map(ticketTypes.map((ticketType) => [ticketType.id, ticketType]));
+    const countsByTicketTypeId = new Map(rows.map((row) => [row.ticketTypeId, row._count._all]));
 
-    return rows.map((row) => ({
-      ticketType: ticketTypesById.get(row.ticketTypeId) ?? null,
-      ticketTypeId: row.ticketTypeId,
-      count: row._count._all
+    return ticketTypes.map((ticketType) => ({
+      ticketType,
+      ticketTypeId: ticketType.id,
+      count: countsByTicketTypeId.get(ticketType.id) ?? 0
+    }));
+  }
+
+  async getTicketsByTypeAndStatus(filters: ReportFiltersDto) {
+    const [rows, ticketTypes] = await Promise.all([
+      this.prisma.ticket.groupBy({
+        by: ['ticketTypeId', 'status'],
+        where: this.buildBaseWhere(filters),
+        _count: { _all: true },
+        orderBy: [{ ticketTypeId: 'asc' }, { status: 'asc' }]
+      }),
+      this.prisma.ticketType.findMany({
+        where: filters.ticketTypeId ? { id: filters.ticketTypeId } : undefined,
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' }
+      })
+    ]);
+
+    const countsByTypeAndStatus = new Map(rows.map((row) => [`${row.ticketTypeId}:${row.status}`, row._count._all]));
+
+    return ticketTypes.map((ticketType) => ({
+      ticketType,
+      ticketTypeId: ticketType.id,
+      counts: Object.fromEntries(
+        ticketStatuses.map((status) => [status, countsByTypeAndStatus.get(`${ticketType.id}:${status}`) ?? 0])
+      )
     }));
   }
 

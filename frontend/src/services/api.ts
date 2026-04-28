@@ -13,6 +13,8 @@ import type {
   TicketHistory,
   TicketStatus,
   TicketType,
+  TypeStatusReport,
+  UpdateUserPayload,
   User,
 } from '../types/domain';
 import { request } from './http';
@@ -42,6 +44,8 @@ export const ticketsService = {
     request<Ticket>(`/tickets/${id}/status`, { method: 'PATCH', body: { status, observation } }),
   finishTicket: (id: string) => request<Ticket>(`/tickets/${id}/finish`, { method: 'PATCH' }),
   closeTicket: (id: string) => request<Ticket>(`/tickets/${id}/close`, { method: 'PATCH' }),
+  reopenTicket: (id: string, observation: string) =>
+    request<Ticket>(`/tickets/${id}/reopen`, { method: 'PATCH', body: { observation } }),
   getHistory: (id: string) => request<TicketHistory[]>(`/tickets/${id}/history`),
 };
 
@@ -57,6 +61,7 @@ export const ticketTypesService = {
 export const usersService = {
   listUsers: () => request<User[]>('/users'),
   createUser: (payload: CreateUserPayload) => request<User>('/users', { method: 'POST', body: payload }),
+  updateUser: (id: string, payload: UpdateUserPayload) => request<User>(`/users/${id}`, { method: 'PATCH', body: payload }),
 };
 
 export const commentsService = {
@@ -78,5 +83,6 @@ export const reportsService = {
   getTicketsByStatus: () => request<ReportCount[]>('/reports/tickets-by-status'),
   getTicketsByPriority: () => request<ReportCount[]>('/reports/tickets-by-priority'),
   getTicketsByType: () => request<ReportCount[]>('/reports/tickets-by-type'),
+  getTicketsByTypeAndStatus: () => request<TypeStatusReport[]>('/reports/tickets-by-type-and-status'),
   getWorkloadByWorker: () => request<ReportCount[]>('/reports/workload-by-worker'),
 };

@@ -1,1 +1,1 @@
-export const NEAR_DUE_DAYS = 2;
+export const NEAR_DUE_DAYS = 3;

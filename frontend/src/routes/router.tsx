@@ -27,7 +27,7 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'tickets', element: <TicketsPage /> },
       { path: 'tickets/:id', element: <TicketDetailPage /> },
-      { path: 'ticket-types', element: <TicketTypesPage /> },
+      { path: 'ticket-types', element: <ManagementRoute><TicketTypesPage /></ManagementRoute> },
       { path: 'users', element: <ManagementRoute><UsersPage /></ManagementRoute> },
       { path: 'reports', element: <ManagementRoute><ReportsPage /></ManagementRoute> },
     ],

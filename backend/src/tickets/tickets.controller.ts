@@ -8,6 +8,7 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { ChangeTicketStatusDto } from './dto/change-ticket-status.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { DeriveTicketDto } from './dto/derive-ticket.dto';
+import { ReopenTicketDto } from './dto/reopen-ticket.dto';
 import { TicketFiltersDto } from './dto/ticket-filters.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketsService } from './tickets.service';
@@ -59,6 +60,12 @@ export class TicketsController {
   @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE)
   closeTicket(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.ticketsService.closeTicket(id, user);
+  }
+
+  @Patch(':id/reopen')
+  @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE)
+  reopenTicket(@Param('id') id: string, @Body() dto: ReopenTicketDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.ticketsService.reopenTicket(id, dto, user);
   }
 
   @Get(':id/history')

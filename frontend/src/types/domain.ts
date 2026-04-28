@@ -112,6 +112,12 @@ export type ReportCount = {
   ticketType?: Pick<TicketType, 'id' | 'name'> | null;
 };
 
+export type TypeStatusReport = {
+  ticketTypeId: string;
+  ticketType: Pick<TicketType, 'id' | 'name'>;
+  counts: Record<TicketStatus, number>;
+};
+
 export type CreateTicketPayload = {
   code?: string;
   title: string;
@@ -126,11 +132,15 @@ export type TicketFilters = {
   page?: number;
   pageSize?: number;
   search?: string;
+  tray?: 'inbox' | 'active' | 'review' | 'closed' | 'all';
   status?: TicketStatus;
   priority?: Priority;
   ticketTypeId?: string;
   assignedToId?: string;
+  assignedToRut?: string;
   inputChannel?: InputChannel;
+  sortBy?: 'createdAt' | 'dueDate';
+  sortOrder?: 'asc' | 'desc';
   overdue?: boolean;
   nearDue?: boolean;
 };
@@ -149,6 +159,10 @@ export type CreateUserPayload = {
   password: string;
   role: UserRole;
   enabled?: boolean;
+};
+
+export type UpdateUserPayload = Partial<Omit<CreateUserPayload, 'password'>> & {
+  password?: string;
 };
 
 export type CreateTicketTypePayload = {
