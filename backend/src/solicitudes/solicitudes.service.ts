@@ -17,14 +17,14 @@ import {
 } from '../comun/usuario-seguro.util';
 import { buildRequestsVisibilityFilter } from '../comun/visibilidad-solicitudes.util';
 import { PrismaService } from '../prisma/prisma.service';
-import { AgregarObservacionSolicitudDto } from './dto/agregar-observacion-solicitud.dto';
-import { AsignarSolicitudDto } from './dto/asignar-solicitud.dto';
-import { CambiarEstadoSolicitudDto } from './dto/cambiar-estado-solicitud.dto';
-import { CerrarSolicitudDto } from './dto/cerrar-solicitud.dto';
-import { CreateSolicitudDto } from './dto/create-solicitud.dto';
-import { DerivarSolicitudDto } from './dto/derivar-solicitud.dto';
+import { AgregarObservacionSolicitudDto as AddCommentDto } from './dto/agregar-observacion-solicitud.dto';
+import { AsignarSolicitudDto as AssignRequestDto } from './dto/asignar-solicitud.dto';
+import { CambiarEstadoSolicitudDto as ChangeStatusDto } from './dto/cambiar-estado-solicitud.dto';
+import { CerrarSolicitudDto as CloseRequestDto } from './dto/cerrar-solicitud.dto';
+import { CreateSolicitudDto as CreateRequestDto } from './dto/create-solicitud.dto';
+import { DerivarSolicitudDto as TransferRequestDto } from './dto/derivar-solicitud.dto';
 import { FiltroSolicitudesDto } from './dto/filtro-solicitudes.dto';
-import { FinalizarSolicitudDto } from './dto/finalizar-solicitud.dto';
+import { FinalizarSolicitudDto as FinalizeRequestDto } from './dto/finalizar-solicitud.dto';
 import {
   ACTIVE_REQUEST_WHERE,
   buildRequestsQueryFilter,
@@ -54,21 +54,21 @@ type RequestHistoryData = Prisma.HistorialSolicitudUncheckedCreateInput;
 export class SolicitudesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async crear(createSolicitudDto: CreateSolicitudDto, usuario: UsuarioToken) {
+  async create(createRequestDto: CreateRequestDto, usuario: UsuarioToken) {
     await this.ensureActiveUserExists(usuario.id);
     const requestType = await this.ensureActiveRequestTypeExists(
-      createSolicitudDto.tipoSolicitudId,
+      createRequestDto.tipoSolicitudId,
     );
-    if (typeof createSolicitudDto.asignadoAId !== 'number') {
+    if (typeof createRequestDto.asignadoAId !== 'number') {
       throw new BadRequestException(
         'Debe asignar un responsable al crear la solicitud',
       );
     }
     const externalReference = this.normalizeAndValidateExternalReference(
-      createSolicitudDto.numeroSolicitud,
+      createRequestDto.numeroSolicitud,
     );
     const assignedUser = await this.validateAssignmentTarget(
-      createSolicitudDto.asignadoAId,
+      createRequestDto.asignadoAId,
     );
 
     const areaActualId = this.resolveCurrentAreaId(
@@ -84,10 +84,10 @@ export class SolicitudesService {
     try {
       const createdRequest = await this.createRequestWithAvailableSequenceNumber({
         data: {
-          titulo: createSolicitudDto.titulo,
-          descripcion: createSolicitudDto.descripcion,
-          prioridad: createSolicitudDto.prioridad,
-          canalIngreso: createSolicitudDto.canalIngreso,
+          titulo: createRequestDto.titulo,
+          descripcion: createRequestDto.descripcion,
+          prioridad: createRequestDto.prioridad,
+          canalIngreso: createRequestDto.canalIngreso,
           fechaVencimiento: dueDate,
           creadoPor: {
             connect: { id: usuario.id },
@@ -96,7 +96,7 @@ export class SolicitudesService {
             connect: { id: areaActualId },
           },
           tipoSolicitud: {
-            connect: { id: createSolicitudDto.tipoSolicitudId },
+            connect: { id: createRequestDto.tipoSolicitudId },
           },
           ...(externalReference ? { numeroSolicitud: externalReference } : {}),
           asignadoA: {
@@ -104,36 +104,36 @@ export class SolicitudesService {
           },
         },
         usuarioId: usuario.id,
-        comentario: createSolicitudDto.comentario,
+        comentario: createRequestDto.comentario,
       });
 
-      return this.verDetalle(createdRequest.id, usuario);
+      return this.getDetails(createdRequest.id, usuario);
     } catch (error) {
       handlePrismaError(error, 'solicitud');
     }
   }
 
-  async listar(usuario: UsuarioToken, filtros: FiltroSolicitudesDto) {
+  async list(usuario: UsuarioToken, filters: FiltroSolicitudesDto) {
     await this.ensureActiveUserExists(usuario.id);
 
     const where = combineRequestFilters(
       ACTIVE_REQUEST_WHERE,
       buildRequestsVisibilityFilter(usuario),
-      buildRequestsQueryFilter(filtros),
+      buildRequestsQueryFilter(filters),
     );
 
     const requests = await this.prisma.solicitud.findMany({
       where,
       include: REQUEST_INCLUDE,
       orderBy: [{ creadoEn: 'desc' }],
-      ...(typeof filtros.offset === 'number' ? { skip: filtros.offset } : {}),
-      ...(typeof filtros.limite === 'number' ? { take: filtros.limite } : {}),
+      ...(typeof filters.offset === 'number' ? { skip: filters.offset } : {}),
+      ...(typeof filters.limite === 'number' ? { take: filters.limite } : {}),
     });
 
     return requests.map((request) => presentRequest(request));
   }
 
-  async verDetalle(id: number, usuario: UsuarioToken) {
+  async getDetails(id: number, usuario: UsuarioToken) {
     await this.ensureActiveUserExists(usuario.id);
 
     const request = await this.prisma.solicitud.findFirst({
@@ -171,20 +171,20 @@ export class SolicitudesService {
     });
   }
 
-  async asignarSolicitud(
+  async assignRequest(
     id: number,
-    asignarSolicitudDto: AsignarSolicitudDto,
+    assignRequestDto: AssignRequestDto,
     usuario: UsuarioToken,
   ) {
     const request = await this.ensureActiveRequestExists(id);
     await this.ensureActiveUserExists(usuario.id);
     const assignedUser = await this.validateAssignmentTarget(
-      asignarSolicitudDto.asignadoAId,
+      assignRequestDto.asignadoAId,
     );
 
     validateRequestEditable(request);
 
-    if (request.asignadoAId === asignarSolicitudDto.asignadoAId) {
+    if (request.asignadoAId === assignRequestDto.asignadoAId) {
       throw new BadRequestException(
         'La solicitud ya se encuentra asignada a este usuario',
       );
@@ -201,22 +201,22 @@ export class SolicitudesService {
         accion: AccionHistorialSolicitud.ASIGNADA,
         asignadoOrigenId: request.asignadoAId,
         asignadoDestinoId: assignedUser.id,
-        comentario: asignarSolicitudDto.comentario,
+        comentario: assignRequestDto.comentario,
       },
     });
 
-    return this.verDetalle(id, usuario);
+    return this.getDetails(id, usuario);
   }
 
-  async derivarSolicitudAUsuario(
+  async transferRequestToUser(
     id: number,
-    derivarSolicitudDto: DerivarSolicitudDto,
+    transferRequestDto: TransferRequestDto,
     usuario: UsuarioToken,
   ) {
     const request = await this.ensureActiveRequestExists(id);
     await this.ensureActiveUserExists(usuario.id);
     const assignedUser = await this.validateAssignmentTarget(
-      derivarSolicitudDto.asignadoAId,
+      transferRequestDto.asignadoAId,
     );
 
     validateRequestEditable(request);
@@ -241,16 +241,16 @@ export class SolicitudesService {
         estadoDestino: EstadoSolicitud.DERIVADA,
         asignadoOrigenId: request.asignadoAId,
         asignadoDestinoId: assignedUser.id,
-        comentario: derivarSolicitudDto.comentario,
+        comentario: transferRequestDto.comentario,
       },
     });
 
-    return this.verDetalle(id, usuario);
+    return this.getDetails(id, usuario);
   }
 
-  async cambiarEstadoSolicitud(
+  async changeRequestStatus(
     id: number,
-    cambiarEstadoSolicitudDto: CambiarEstadoSolicitudDto,
+    changeStatusDto: ChangeStatusDto,
     usuario: UsuarioToken,
   ) {
     const request = await this.ensureActiveRequestExists(id);
@@ -260,33 +260,33 @@ export class SolicitudesService {
 
     validateStatusChangeAllowed(
       request,
-      cambiarEstadoSolicitudDto.estado,
+      changeStatusDto.estado,
       usuario,
     );
 
     await this.updateRequestWithHistory({
       solicitudId: id,
       datosSolicitud: {
-        estado: cambiarEstadoSolicitudDto.estado,
+        estado: changeStatusDto.estado,
       },
       history: {
         solicitudId: id,
         usuarioId: usuario.id,
         accion: getHistoryActionForStatusChange(
-          cambiarEstadoSolicitudDto.estado,
+          changeStatusDto.estado,
         ),
         estadoOrigen: request.estado,
-        estadoDestino: cambiarEstadoSolicitudDto.estado,
-        comentario: cambiarEstadoSolicitudDto.comentario,
+        estadoDestino: changeStatusDto.estado,
+        comentario: changeStatusDto.comentario,
       },
     });
 
-    return this.verDetalle(id, usuario);
+    return this.getDetails(id, usuario);
   }
 
-  async agregarObservacion(
+  async addComment(
     id: number,
-    agregarObservacionSolicitudDto: AgregarObservacionSolicitudDto,
+    addCommentDto: AddCommentDto,
     usuario: UsuarioToken,
   ) {
     const request = await this.ensureActiveRequestExists(id);
@@ -300,15 +300,15 @@ export class SolicitudesService {
       estadoOrigen: request.estado,
       estadoDestino: request.estado,
       asignadoDestinoId: request.asignadoAId,
-      comentario: agregarObservacionSolicitudDto.comentario,
+      comentario: addCommentDto.comentario,
     });
 
-    return this.verDetalle(id, usuario);
+    return this.getDetails(id, usuario);
   }
 
-  async finalizarSolicitud(
+  async finalizeRequest(
     id: number,
-    finalizarSolicitudDto: FinalizarSolicitudDto,
+    finalizeRequestDto: FinalizeRequestDto,
     usuario: UsuarioToken,
   ) {
     const request = await this.ensureActiveRequestExists(id);
@@ -327,16 +327,16 @@ export class SolicitudesService {
         accion: AccionHistorialSolicitud.FINALIZADA,
         estadoOrigen: request.estado,
         estadoDestino: EstadoSolicitud.FINALIZADA,
-        comentario: finalizarSolicitudDto.comentario,
+        comentario: finalizeRequestDto.comentario,
       },
     });
 
-    return this.verDetalle(id, usuario);
+    return this.getDetails(id, usuario);
   }
 
-  async cerrarSolicitud(
+  async closeRequest(
     id: number,
-    cerrarSolicitudDto: CerrarSolicitudDto,
+    closeRequestDto: CloseRequestDto,
     usuario: UsuarioToken,
   ) {
     const request = await this.ensureActiveRequestExists(id);
@@ -355,14 +355,14 @@ export class SolicitudesService {
         accion: AccionHistorialSolicitud.CERRADA,
         estadoOrigen: request.estado,
         estadoDestino: EstadoSolicitud.CERRADA,
-        comentario: cerrarSolicitudDto.comentario,
+        comentario: closeRequestDto.comentario,
       },
     });
 
-    return this.verDetalle(id, usuario);
+    return this.getDetails(id, usuario);
   }
 
-  async eliminarSolicitudLogicamente(
+  async logicallyRemoveRequest(
     id: number,
     actorUsuarioId: number,
     comentario?: string,

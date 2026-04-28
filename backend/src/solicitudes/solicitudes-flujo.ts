@@ -94,13 +94,13 @@ export function validateStatusChangeAllowed(
 
   if (destinationStatus === EstadoSolicitud.CERRADA) {
     throw new BadRequestException(
-      'Use el metodo cerrarSolicitud para estos cambios de estado',
+      'Use el metodo closeRequest para estos cambios de estado',
     );
   }
 
   if (isWorkerRole(user) && destinationStatus === EstadoSolicitud.FINALIZADA) {
     throw new BadRequestException(
-      'Use el metodo finalizarSolicitud para marcar la solicitud como FINALIZADA',
+      'Use el metodo finalizeRequest para marcar la solicitud como FINALIZADA',
     );
   }
 
@@ -112,7 +112,7 @@ export function validateStatusChangeAllowed(
 
   if (destinationStatus === EstadoSolicitud.DERIVADA) {
     throw new BadRequestException(
-      'Use el metodo derivarSolicitud para derivar solicitudes',
+      'Use el metodo transferRequestToUser para derivar solicitudes',
     );
   }
 

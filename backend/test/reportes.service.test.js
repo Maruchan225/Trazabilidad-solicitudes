@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { EstadoSolicitud, PrioridadSolicitud } = require('@prisma/client');
 const { ReportesService } = require('../dist/src/reportes/reportes.service.js');
 
-test('ReportesService.obtenerDashboardTrabajador resume solicitudes asignadas al trabajador', async () => {
+test('ReportesService.getWorkerDashboard resume solicitudes asignadas al trabajador', async () => {
   const llamadas = [];
   const prisma = {
     solicitud: {
@@ -43,7 +43,7 @@ test('ReportesService.obtenerDashboardTrabajador resume solicitudes asignadas al
 
   const service = new ReportesService(prisma);
 
-  const resultado = await service.obtenerDashboardTrabajador({
+  const resultado = await service.getWorkerDashboard({
     id: 7,
     correo: 'trabajador@demo.cl',
     rol: 'TRABAJADOR',
@@ -64,7 +64,7 @@ test('ReportesService.obtenerDashboardTrabajador resume solicitudes asignadas al
   assert.equal(llamadas[5].fechaCierre, null);
 });
 
-test('ReportesService.obtenerSolicitudesPorPrioridad entrega todas las prioridades con su cantidad', async () => {
+test('ReportesService.getRequestsByPriority entrega todas las prioridades con su cantidad', async () => {
   const prisma = {
     solicitud: {
       groupBy: async () => [
@@ -76,7 +76,7 @@ test('ReportesService.obtenerSolicitudesPorPrioridad entrega todas las prioridad
 
   const service = new ReportesService(prisma);
 
-  const resultado = await service.obtenerSolicitudesPorPrioridad({});
+  const resultado = await service.getRequestsByPriority({});
 
   assert.deepEqual(resultado, [
     { prioridad: PrioridadSolicitud.BAJA, cantidad: 0 },
@@ -86,7 +86,7 @@ test('ReportesService.obtenerSolicitudesPorPrioridad entrega todas las prioridad
   ]);
 });
 
-test('ReportesService.obtenerCargaPorTrabajador resume la carga operativa por usuario', async () => {
+test('ReportesService.getWorkerLoad resume la carga operativa por usuario', async () => {
   let findManyArgs;
 
   const prisma = {
@@ -119,7 +119,7 @@ test('ReportesService.obtenerCargaPorTrabajador resume la carga operativa por us
   };
 
   const service = new ReportesService(prisma);
-  const resultado = await service.obtenerCargaPorTrabajador({
+  const resultado = await service.getWorkerLoad({
     trabajadorId: 9,
   });
 

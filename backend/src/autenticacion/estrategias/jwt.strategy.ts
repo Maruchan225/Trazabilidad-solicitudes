@@ -20,7 +20,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: UsuarioToken): Promise<UsuarioToken> {
     const user =
-      await this.usuariosService.buscarContextoAutenticacionPorId(payload.id);
+      await this.usuariosService.findAuthContextById(payload.id);
 
     if (!user || !user.activo) {
       throw new UnauthorizedException('Sesion invalida o expirada');

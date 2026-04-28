@@ -13,17 +13,17 @@ export class HistorialSolicitudesController {
 
   @Get()
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO)
-  listar() {
-    return this.historialSolicitudesService.listar();
+  list() {
+    return this.historialSolicitudesService.list();
   }
 
   @Get('solicitud/:solicitudId')
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO, RolUsuario.TRABAJADOR)
-  listarPorSolicitud(
+  listByRequest(
     @Param('solicitudId', ParseIntPipe) solicitudId: number,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.historialSolicitudesService.listarPorSolicitud(
+    return this.historialSolicitudesService.listByRequest(
       solicitudId,
       usuario,
     );

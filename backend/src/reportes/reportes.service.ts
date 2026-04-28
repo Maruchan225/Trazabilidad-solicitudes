@@ -9,8 +9,8 @@ import { FiltroReportesDto } from './dto/filtro-reportes.dto';
 export class ReportesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async obtenerResumenGeneral(filtros: FiltroReportesDto) {
-    const where = this.buildReportFilter(filtros);
+  async getGeneralSummary(filters: FiltroReportesDto) {
+    const where = this.buildReportFilter(filters);
     const [totalRequests, requestsByStatus, dueSoonCount] =
       await Promise.all([
         this.prisma.solicitud.count({ where }),
@@ -41,8 +41,8 @@ export class ReportesService {
     };
   }
 
-  async obtenerSolicitudesPorEstado(filtros: FiltroReportesDto) {
-    const where = this.buildReportFilter(filtros);
+  async getRequestsByStatus(filters: FiltroReportesDto) {
+    const where = this.buildReportFilter(filters);
     const [groupedItems, overdueRequests] = await Promise.all([
       this.prisma.solicitud.groupBy({
         by: ['estado'],
@@ -65,13 +65,13 @@ export class ReportesService {
     };
   }
 
-  async obtenerCargaPorTrabajador(filtros: FiltroReportesDto) {
-    const where = this.buildReportFilter(filtros);
+  async getWorkerLoad(filters: FiltroReportesDto) {
+    const where = this.buildReportFilter(filters);
 
     const workers = await this.prisma.usuario.findMany({
       where: {
         rol: 'TRABAJADOR',
-        ...(filtros.trabajadorId ? { id: filtros.trabajadorId } : {}),
+        ...(filters.trabajadorId ? { id: filters.trabajadorId } : {}),
       },
       orderBy: [{ apellidos: 'asc' }, { nombres: 'asc' }],
       select: {
@@ -113,8 +113,8 @@ export class ReportesService {
     }));
   }
 
-  async obtenerTiempoPromedioRespuesta(filtros: FiltroReportesDto) {
-    const where = this.buildReportFilter(filtros);
+  async getAverageResponseTime(filters: FiltroReportesDto) {
+    const where = this.buildReportFilter(filters);
     const closedRequests = await this.prisma.solicitud.findMany({
       where: {
         ...where,
@@ -157,8 +157,8 @@ export class ReportesService {
     };
   }
 
-  async obtenerSolicitudesVencidas(filtros: FiltroReportesDto) {
-    const where = this.buildReportFilter(filtros);
+  async getOverdueRequests(filters: FiltroReportesDto) {
+    const where = this.buildReportFilter(filters);
 
     const requests = await this.prisma.solicitud.findMany({
       where: this.buildOverdueRequestsFilter(where),
@@ -188,12 +188,12 @@ export class ReportesService {
     }));
   }
 
-  async obtenerSolicitudesPorTipo(filtros: FiltroReportesDto) {
-    const where = this.buildReportFilter(filtros);
+  async getRequestsByType(filters: FiltroReportesDto) {
+    const where = this.buildReportFilter(filters);
 
     const items = await this.prisma.tipoSolicitud.findMany({
-      where: filtros.tipoSolicitudId
-        ? { id: filtros.tipoSolicitudId }
+      where: filters.tipoSolicitudId
+        ? { id: filters.tipoSolicitudId }
         : undefined,
       orderBy: {
         nombre: 'asc',
@@ -217,10 +217,10 @@ export class ReportesService {
     }));
   }
 
-  async obtenerSolicitudesPorPrioridad(filtros: FiltroReportesDto) {
-    const where = this.buildReportFilter(filtros);
+  async getRequestsByPriority(filters: FiltroReportesDto) {
+    const where = this.buildReportFilter(filters);
 
-    const agrupadas = await this.prisma.solicitud.groupBy({
+    const groupedRequests = await this.prisma.solicitud.groupBy({
       by: ['prioridad'],
       where,
       _count: {
@@ -238,11 +238,11 @@ export class ReportesService {
     return priorities.map((priority) => ({
       prioridad: priority,
       cantidad:
-        agrupadas.find((item) => item.prioridad === priority)?._count._all ?? 0,
+        groupedRequests.find((item) => item.prioridad === priority)?._count._all ?? 0,
     }));
   }
 
-  async obtenerDashboardTrabajador(usuario: UsuarioToken) {
+  async getWorkerDashboard(usuario: UsuarioToken) {
     const baseWhere: Prisma.SolicitudWhereInput = {
       eliminadoEn: null,
       asignadoAId: usuario.id,
@@ -301,22 +301,22 @@ export class ReportesService {
   }
 
   private buildReportFilter(
-    filtros: FiltroReportesDto,
+    filters: FiltroReportesDto,
   ): Prisma.SolicitudWhereInput {
-    const { fechaDesde, fechaHasta } = this.getValidDateRange(filtros);
+    const { fromDate, toDate } = this.getValidDateRange(filters);
 
-    if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
+    if (fromDate && toDate && fromDate > toDate) {
       throw new BadRequestException(
         'fechaDesde no puede ser mayor que fechaHasta',
       );
     }
 
     const dateFilter =
-      fechaDesde || fechaHasta
+      fromDate || toDate
         ? {
             creadoEn: {
-              ...(fechaDesde ? { gte: this.startOfDay(fechaDesde) } : {}),
-              ...(fechaHasta ? { lte: this.endOfDay(fechaHasta) } : {}),
+              ...(fromDate ? { gte: this.startOfDay(fromDate) } : {}),
+              ...(toDate ? { lte: this.endOfDay(toDate) } : {}),
             },
           }
         : {};
@@ -324,9 +324,9 @@ export class ReportesService {
     return {
       eliminadoEn: null,
       ...dateFilter,
-      ...(filtros.trabajadorId ? { asignadoAId: filtros.trabajadorId } : {}),
-      ...(filtros.tipoSolicitudId
-        ? { tipoSolicitudId: filtros.tipoSolicitudId }
+      ...(filters.trabajadorId ? { asignadoAId: filters.trabajadorId } : {}),
+      ...(filters.tipoSolicitudId
+        ? { tipoSolicitudId: filters.tipoSolicitudId }
         : {}),
     };
   }
@@ -337,17 +337,17 @@ export class ReportesService {
     });
   }
 
-  private getValidDateRange(filtros: FiltroReportesDto) {
-    const fechaDesde = this.parseOptionalDate(
-      filtros.fechaDesde,
+  private getValidDateRange(filters: FiltroReportesDto) {
+    const fromDate = this.parseOptionalDate(
+      filters.fechaDesde,
       'fechaDesde no es una fecha valida',
     );
-    const fechaHasta = this.parseOptionalDate(
-      filtros.fechaHasta,
+    const toDate = this.parseOptionalDate(
+      filters.fechaHasta,
       'fechaHasta no es una fecha valida',
     );
 
-    return { fechaDesde, fechaHasta };
+    return { fromDate, toDate };
   }
 
   private parseOptionalDate(value: string | undefined, errorMessage: string) {

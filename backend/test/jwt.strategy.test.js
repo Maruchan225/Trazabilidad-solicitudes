@@ -13,7 +13,7 @@ test('JwtStrategy.validate rehidrata el usuario con el estado actual de base de 
     getOrThrow: () => 'jwt-secret-demo',
   };
   const usuariosService = {
-    buscarContextoAutenticacionPorId: async (id) => {
+    findAuthContextById: async (id) => {
       assert.equal(id, 8);
 
       return {
@@ -48,7 +48,7 @@ test('JwtStrategy.validate rechaza usuarios inexistentes o inactivos', async () 
   };
 
   const strategy = new JwtStrategy(configService, {
-    buscarContextoAutenticacionPorId: async () => ({
+    findAuthContextById: async () => ({
       id: 3,
       email: 'inactivo@demo.cl',
       rol: RolUsuario.TRABAJADOR,

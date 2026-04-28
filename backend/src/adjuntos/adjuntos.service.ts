@@ -18,12 +18,12 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AdjuntosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async subirAdjunto(
+  async uploadAttachment(
     solicitudId: number,
-    archivo: Express.Multer.File | undefined,
+    file: Express.Multer.File | undefined,
     usuario: UsuarioToken,
   ) {
-    if (!archivo) {
+    if (!file) {
       throw new BadRequestException('Debe adjuntar un archivo valido');
     }
 
@@ -33,11 +33,11 @@ export class AdjuntosService {
       const createdAttachment = await this.prisma.$transaction(async (tx) => {
         const attachment = await tx.adjunto.create({
           data: {
-            nombreOriginal: archivo.originalname,
-            nombreArchivo: archivo.filename,
-            ruta: archivo.path.replace(/\\/g, '/'),
-            mimeType: archivo.mimetype,
-            tamano: archivo.size,
+            nombreOriginal: file.originalname,
+            nombreArchivo: file.filename,
+            ruta: file.path.replace(/\\/g, '/'),
+            mimeType: file.mimetype,
+            tamano: file.size,
             solicitudId,
             subidoPorId: usuario.id,
           },
@@ -51,7 +51,7 @@ export class AdjuntosService {
           estadoOrigen: request.estado,
           estadoDestino: request.estado,
           asignadoDestinoId: request.asignadoAId,
-          comentario: `Adjunto subido: ${archivo.originalname}`,
+          comentario: `Adjunto subido: ${file.originalname}`,
         });
 
         return attachment;
@@ -63,7 +63,7 @@ export class AdjuntosService {
     }
   }
 
-  async listarPorSolicitud(solicitudId: number, usuario: UsuarioToken) {
+  async listByRequest(solicitudId: number, usuario: UsuarioToken) {
     await this.ensureVisibleRequest(solicitudId, usuario);
 
     return this.prisma.adjunto.findMany({
@@ -77,12 +77,12 @@ export class AdjuntosService {
     });
   }
 
-  async obtenerInformacion(id: number, usuario: UsuarioToken) {
+  async getInfo(id: number, usuario: UsuarioToken) {
     const attachment = await this.ensureVisibleAttachment(id, usuario);
     return attachment;
   }
 
-  async obtenerArchivoAdjunto(id: number, usuario: UsuarioToken) {
+  async getAttachmentFile(id: number, usuario: UsuarioToken) {
     const attachment = await this.ensureVisibleAttachment(id, usuario);
 
     try {
@@ -105,7 +105,7 @@ export class AdjuntosService {
     };
   }
 
-  async eliminarAdjunto(id: number, usuario: UsuarioToken) {
+  async removeAttachment(id: number, usuario: UsuarioToken) {
     const attachment = await this.ensureVisibleAttachment(id, usuario);
     this.validateAttachmentDeletionPermission(attachment.subidoPorId, usuario);
 

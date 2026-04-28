@@ -12,14 +12,14 @@ import { RolUsuario } from '@prisma/client';
 import { Roles } from '../autenticacion/decoradores/roles.decorator';
 import { UsuarioAutenticado } from '../autenticacion/decoradores/usuario-autenticado.decorator';
 import type { UsuarioToken } from '../autenticacion/interfaces/usuario-token.interface';
-import { AgregarObservacionSolicitudDto } from './dto/agregar-observacion-solicitud.dto';
-import { AsignarSolicitudDto } from './dto/asignar-solicitud.dto';
-import { CambiarEstadoSolicitudDto } from './dto/cambiar-estado-solicitud.dto';
-import { CerrarSolicitudDto } from './dto/cerrar-solicitud.dto';
-import { CreateSolicitudDto } from './dto/create-solicitud.dto';
-import { DerivarSolicitudDto } from './dto/derivar-solicitud.dto';
+import { AgregarObservacionSolicitudDto as AddCommentDto } from './dto/agregar-observacion-solicitud.dto';
+import { AsignarSolicitudDto as AssignRequestDto } from './dto/asignar-solicitud.dto';
+import { CambiarEstadoSolicitudDto as ChangeStatusDto } from './dto/cambiar-estado-solicitud.dto';
+import { CerrarSolicitudDto as CloseRequestDto } from './dto/cerrar-solicitud.dto';
+import { CreateSolicitudDto as CreateRequestDto } from './dto/create-solicitud.dto';
+import { DerivarSolicitudDto as TransferRequestDto } from './dto/derivar-solicitud.dto';
 import { FiltroSolicitudesDto } from './dto/filtro-solicitudes.dto';
-import { FinalizarSolicitudDto } from './dto/finalizar-solicitud.dto';
+import { FinalizarSolicitudDto as FinalizeRequestDto } from './dto/finalizar-solicitud.dto';
 import { SolicitudesService } from './solicitudes.service';
 
 @Controller('solicitudes')
@@ -28,111 +28,111 @@ export class SolicitudesController {
 
   @Post()
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO)
-  crear(
-    @Body() createSolicitudDto: CreateSolicitudDto,
+  create(
+    @Body() createRequestDto: CreateRequestDto,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.solicitudesService.crear(createSolicitudDto, usuario);
+    return this.solicitudesService.create(createRequestDto, usuario);
   }
 
   @Get()
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO, RolUsuario.TRABAJADOR)
-  listar(
+  list(
     @UsuarioAutenticado() usuario: UsuarioToken,
-    @Query() filtros: FiltroSolicitudesDto,
+    @Query() filters: FiltroSolicitudesDto,
   ) {
-    return this.solicitudesService.listar(usuario, filtros);
+    return this.solicitudesService.list(usuario, filters);
   }
 
   @Get(':id')
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO, RolUsuario.TRABAJADOR)
-  verDetalle(
+  getDetails(
     @Param('id', ParseIntPipe) id: number,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.solicitudesService.verDetalle(id, usuario);
+    return this.solicitudesService.getDetails(id, usuario);
   }
 
   @Patch(':id/asignar')
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO)
-  asignar(
+  assign(
     @Param('id', ParseIntPipe) id: number,
-    @Body() asignarSolicitudDto: AsignarSolicitudDto,
+    @Body() assignRequestDto: AssignRequestDto,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.solicitudesService.asignarSolicitud(
+    return this.solicitudesService.assignRequest(
       id,
-      asignarSolicitudDto,
+      assignRequestDto,
       usuario,
     );
   }
 
   @Patch(':id/derivar')
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO)
-  derivar(
+  transfer(
     @Param('id', ParseIntPipe) id: number,
-    @Body() derivarSolicitudDto: DerivarSolicitudDto,
+    @Body() transferRequestDto: TransferRequestDto,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.solicitudesService.derivarSolicitudAUsuario(
+    return this.solicitudesService.transferRequestToUser(
       id,
-      derivarSolicitudDto,
+      transferRequestDto,
       usuario,
     );
   }
 
   @Patch(':id/estado')
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO, RolUsuario.TRABAJADOR)
-  cambiarEstado(
+  changeStatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body() cambiarEstadoSolicitudDto: CambiarEstadoSolicitudDto,
+    @Body() changeStatusDto: ChangeStatusDto,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.solicitudesService.cambiarEstadoSolicitud(
+    return this.solicitudesService.changeRequestStatus(
       id,
-      cambiarEstadoSolicitudDto,
+      changeStatusDto,
       usuario,
     );
   }
 
   @Post(':id/observaciones')
   @Roles(RolUsuario.TRABAJADOR)
-  agregarObservacion(
+  addComment(
     @Param('id', ParseIntPipe) id: number,
-    @Body() agregarObservacionSolicitudDto: AgregarObservacionSolicitudDto,
+    @Body() addCommentDto: AddCommentDto,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.solicitudesService.agregarObservacion(
+    return this.solicitudesService.addComment(
       id,
-      agregarObservacionSolicitudDto,
+      addCommentDto,
       usuario,
     );
   }
 
   @Patch(':id/finalizar')
   @Roles(RolUsuario.TRABAJADOR)
-  finalizar(
+  finalize(
     @Param('id', ParseIntPipe) id: number,
-    @Body() finalizarSolicitudDto: FinalizarSolicitudDto,
+    @Body() finalizeRequestDto: FinalizeRequestDto,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.solicitudesService.finalizarSolicitud(
+    return this.solicitudesService.finalizeRequest(
       id,
-      finalizarSolicitudDto,
+      finalizeRequestDto,
       usuario,
     );
   }
 
   @Patch(':id/cerrar')
   @Roles(RolUsuario.ENCARGADO, RolUsuario.REEMPLAZO)
-  cerrar(
+  close(
     @Param('id', ParseIntPipe) id: number,
-    @Body() cerrarSolicitudDto: CerrarSolicitudDto,
+    @Body() closeRequestDto: CloseRequestDto,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.solicitudesService.cerrarSolicitud(
+    return this.solicitudesService.closeRequest(
       id,
-      cerrarSolicitudDto,
+      closeRequestDto,
       usuario,
     );
   }

@@ -11,9 +11,9 @@ import {
 } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
 import { Roles } from '../autenticacion/decoradores/roles.decorator';
-import { CreateUsuarioDto } from './dto/create-usuario.dto';
+import { CreateUsuarioDto as CreateUserDto } from './dto/create-usuario.dto';
 import { FiltroUsuariosDto } from './dto/filtro-usuarios.dto';
-import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import { UpdateUsuarioDto as UpdateUserDto } from './dto/update-usuario.dto';
 import { UsuariosService } from './usuarios.service';
 
 @Controller('usuarios')
@@ -22,30 +22,30 @@ export class UsuariosController {
   constructor(private readonly usuariosService: UsuariosService) {}
 
   @Post()
-  crear(@Body() createUsuarioDto: CreateUsuarioDto) {
-    return this.usuariosService.crear(createUsuarioDto);
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.usuariosService.create(createUserDto);
   }
 
   @Get()
-  listar(@Query() filtros: FiltroUsuariosDto) {
-    return this.usuariosService.listar(filtros);
+  list(@Query() filters: FiltroUsuariosDto) {
+    return this.usuariosService.list(filters);
   }
 
   @Get(':id')
-  obtenerPorId(@Param('id', ParseIntPipe) id: number) {
-    return this.usuariosService.obtenerPorId(id);
+  findById(@Param('id', ParseIntPipe) id: number) {
+    return this.usuariosService.findById(id);
   }
 
   @Patch(':id')
-  actualizar(
+  update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateUsuarioDto: UpdateUsuarioDto,
+    @Body() updateUserDto: UpdateUserDto,
   ) {
-    return this.usuariosService.actualizar(id, updateUsuarioDto);
+    return this.usuariosService.update(id, updateUserDto);
   }
 
   @Delete(':id')
-  eliminar(@Param('id', ParseIntPipe) id: number) {
-    return this.usuariosService.eliminar(id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.usuariosService.remove(id);
   }
 }

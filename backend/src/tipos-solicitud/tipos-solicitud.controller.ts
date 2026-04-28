@@ -10,8 +10,8 @@ import {
 } from '@nestjs/common';
 import { RolUsuario } from '@prisma/client';
 import { Roles } from '../autenticacion/decoradores/roles.decorator';
-import { CreateTipoSolicitudDto } from './dto/create-tipo-solicitud.dto';
-import { UpdateTipoSolicitudDto } from './dto/update-tipo-solicitud.dto';
+import { CreateTipoSolicitudDto as CreateRequestTypeDto } from './dto/create-tipo-solicitud.dto';
+import { UpdateTipoSolicitudDto as UpdateRequestTypeDto } from './dto/update-tipo-solicitud.dto';
 import { TiposSolicitudService } from './tipos-solicitud.service';
 
 @Controller('tipos-solicitud')
@@ -20,30 +20,30 @@ export class TiposSolicitudController {
   constructor(private readonly tiposSolicitudService: TiposSolicitudService) {}
 
   @Post()
-  crear(@Body() createTipoSolicitudDto: CreateTipoSolicitudDto) {
-    return this.tiposSolicitudService.crear(createTipoSolicitudDto);
+  create(@Body() createRequestTypeDto: CreateRequestTypeDto) {
+    return this.tiposSolicitudService.create(createRequestTypeDto);
   }
 
   @Get()
-  listar() {
-    return this.tiposSolicitudService.listar();
+  list() {
+    return this.tiposSolicitudService.list();
   }
 
   @Get(':id')
-  obtenerPorId(@Param('id', ParseIntPipe) id: number) {
-    return this.tiposSolicitudService.obtenerPorId(id);
+  findById(@Param('id', ParseIntPipe) id: number) {
+    return this.tiposSolicitudService.findById(id);
   }
 
   @Patch(':id')
-  actualizar(
+  update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateTipoSolicitudDto: UpdateTipoSolicitudDto,
+    @Body() updateRequestTypeDto: UpdateRequestTypeDto,
   ) {
-    return this.tiposSolicitudService.actualizar(id, updateTipoSolicitudDto);
+    return this.tiposSolicitudService.update(id, updateRequestTypeDto);
   }
 
   @Delete(':id')
-  eliminar(@Param('id', ParseIntPipe) id: number) {
-    return this.tiposSolicitudService.eliminar(id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.tiposSolicitudService.remove(id);
   }
 }

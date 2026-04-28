@@ -26,7 +26,7 @@ import { AdjuntosService } from './adjuntos.service';
 export class AdjuntosController {
   constructor(private readonly adjuntosService: AdjuntosService) {}
 
-  private construirContentDisposition(
+  private buildContentDisposition(
     tipo: 'inline' | 'attachment',
     nombreOriginal: string,
   ) {
@@ -42,57 +42,57 @@ export class AdjuntosController {
 
   @Post(':solicitudId')
   @UseInterceptors(FileInterceptor('archivo', opcionesMulterAdjuntos))
-  subirAdjunto(
+  uploadAttachment(
     @Param('solicitudId', ParseIntPipe) solicitudId: number,
-    @UploadedFile() archivo: Express.Multer.File,
+    @UploadedFile() file: Express.Multer.File,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.adjuntosService.subirAdjunto(solicitudId, archivo, usuario);
+    return this.adjuntosService.uploadAttachment(solicitudId, file, usuario);
   }
 
   @Get('solicitud/:solicitudId')
-  listarPorSolicitud(
+  listByRequest(
     @Param('solicitudId', ParseIntPipe) solicitudId: number,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.adjuntosService.listarPorSolicitud(solicitudId, usuario);
+    return this.adjuntosService.listByRequest(solicitudId, usuario);
   }
 
   @Get(':id/archivo')
-  async obtenerArchivo(
+  async getFile(
     @Param('id', ParseIntPipe) id: number,
-    @Query('descargar') descargar: string | undefined,
+    @Query('descargar') download: string | undefined,
     @UsuarioAutenticado() usuario: UsuarioToken,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const { adjunto, stream } = await this.adjuntosService.obtenerArchivoAdjunto(
+    const { adjunto, stream } = await this.adjuntosService.getAttachmentFile(
       id,
       usuario,
     );
-    const disposition = descargar === 'true' ? 'attachment' : 'inline';
+    const disposition = download === 'true' ? 'attachment' : 'inline';
 
     response.setHeader('Content-Type', adjunto.mimeType);
     response.setHeader(
       'Content-Disposition',
-      this.construirContentDisposition(disposition, adjunto.nombreOriginal),
+      this.buildContentDisposition(disposition, adjunto.nombreOriginal),
     );
 
     return new StreamableFile(stream);
   }
 
   @Get(':id')
-  obtenerInformacion(
+  getInfo(
     @Param('id', ParseIntPipe) id: number,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.adjuntosService.obtenerInformacion(id, usuario);
+    return this.adjuntosService.getInfo(id, usuario);
   }
 
   @Delete(':id')
-  eliminarAdjunto(
+  removeAttachment(
     @Param('id', ParseIntPipe) id: number,
     @UsuarioAutenticado() usuario: UsuarioToken,
   ) {
-    return this.adjuntosService.eliminarAdjunto(id, usuario);
+    return this.adjuntosService.removeAttachment(id, usuario);
   }
 }

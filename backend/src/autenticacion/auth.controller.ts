@@ -11,7 +11,7 @@ export class AuthController {
   @Post('login')
   @Publico()
   @UseGuards(LoginRateLimitGuard)
-  iniciarSesion(@Body() loginDto: LoginDto) {
-    return this.authService.iniciarSesion(loginDto);
+  login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
   }
 }

@@ -11,13 +11,13 @@ test('TiposSolicitudService mantiene el catalogo en modo solo lectura para escri
   const prisma = {
     tipoSolicitud: {
       create: async () => {
-        throw new Error('No deberia intentar crear');
+        throw new Error('No deberia intentar create');
       },
       update: async () => {
-        throw new Error('No deberia intentar actualizar');
+        throw new Error('No deberia intentar update');
       },
       delete: async () => {
-        throw new Error('No deberia intentar eliminar');
+        throw new Error('No deberia intentar remove');
       },
       findUnique: async () => ({ id: 1, nombre: 'Certificado', activo: true }),
     },
@@ -26,21 +26,21 @@ test('TiposSolicitudService mantiene el catalogo en modo solo lectura para escri
   const service = new TiposSolicitudService(prisma);
 
   await assert.rejects(
-    service.crear({ nombre: 'Temporal', diasSla: 5 }),
+    service.create({ nombre: 'Temporal', diasSla: 5 }),
     (error) =>
       error instanceof ForbiddenException &&
       /configuracion inicial de DOM/i.test(error.message),
   );
 
   await assert.rejects(
-    service.actualizar(1, { nombre: 'Ajustado' }),
+    service.update(1, { nombre: 'Ajustado' }),
     (error) =>
       error instanceof ForbiddenException &&
       /configuracion inicial de DOM/i.test(error.message),
   );
 
   await assert.rejects(
-    service.eliminar(1),
+    service.remove(1),
     (error) =>
       error instanceof ForbiddenException &&
       /configuracion inicial de DOM/i.test(error.message),

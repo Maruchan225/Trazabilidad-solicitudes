@@ -4,9 +4,9 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { handlePrismaError } from '../comun/prisma-error.util';
 import { normalizeRut } from '../comun/rut.util';
-import { CreateUsuarioDto } from './dto/create-usuario.dto';
+import { CreateUsuarioDto as CreateUserDto } from './dto/create-usuario.dto';
 import { FiltroUsuariosDto } from './dto/filtro-usuarios.dto';
-import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import { UpdateUsuarioDto as UpdateUserDto } from './dto/update-usuario.dto';
 
 @Injectable()
 export class UsuariosService {
@@ -27,19 +27,19 @@ export class UsuariosService {
     };
   }
 
-  async crear(createUsuarioDto: CreateUsuarioDto) {
-    const areaId = await this.resolveTechnicalAreaId(createUsuarioDto.areaId);
+  async create(createUserDto: CreateUserDto) {
+    const areaId = await this.resolveTechnicalAreaId(createUserDto.areaId);
 
     try {
       const hashedPassword = await this.hashPassword(
-        createUsuarioDto.contrasena,
+        createUserDto.contrasena,
       );
 
       const user = await this.prisma.usuario.create({
         data: {
-          ...createUsuarioDto,
+          ...createUserDto,
           areaId,
-          rut: normalizeRut(createUsuarioDto.rut) ?? createUsuarioDto.rut,
+          rut: normalizeRut(createUserDto.rut) ?? createUserDto.rut,
           contrasena: hashedPassword,
         },
         include: {
@@ -61,8 +61,8 @@ export class UsuariosService {
     }
   }
 
-  async listar(filtros: FiltroUsuariosDto) {
-    const where = this.buildWhereFilter(filtros);
+  async list(filters: FiltroUsuariosDto) {
+    const where = this.buildWhereFilter(filters);
     const users = await this.prisma.usuario.findMany({
       where,
       omit: {
@@ -77,14 +77,14 @@ export class UsuariosService {
         },
       },
       orderBy: [{ apellidos: 'asc' }, { nombres: 'asc' }],
-      ...(typeof filtros.offset === 'number' ? { skip: filtros.offset } : {}),
-      ...(typeof filtros.limite === 'number' ? { take: filtros.limite } : {}),
+      ...(typeof filters.offset === 'number' ? { skip: filters.offset } : {}),
+      ...(typeof filters.limite === 'number' ? { take: filters.limite } : {}),
     });
 
     return users.map((user) => this.mapUserWithTotals(user));
   }
 
-  async obtenerPorId(id: number) {
+  async findById(id: number) {
     const user = await this.prisma.usuario.findUnique({
       where: { id },
       omit: {
@@ -107,29 +107,29 @@ export class UsuariosService {
     return this.mapUserWithTotals(user);
   }
 
-  async actualizar(id: number, updateUsuarioDto: UpdateUsuarioDto) {
-    await this.obtenerPorId(id);
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    await this.findById(id);
 
-    if (updateUsuarioDto.areaId) {
-      await this.ensureAreaExists(updateUsuarioDto.areaId);
+    if (updateUserDto.areaId) {
+      await this.ensureAreaExists(updateUserDto.areaId);
     }
 
     try {
-      const data = updateUsuarioDto.contrasena
+      const data = updateUserDto.contrasena
         ? {
-            ...updateUsuarioDto,
-            ...(updateUsuarioDto.rut
+            ...updateUserDto,
+            ...(updateUserDto.rut
               ? {
-                  rut: normalizeRut(updateUsuarioDto.rut) ?? updateUsuarioDto.rut,
+                  rut: normalizeRut(updateUserDto.rut) ?? updateUserDto.rut,
                 }
               : {}),
-            contrasena: await this.hashPassword(updateUsuarioDto.contrasena),
+            contrasena: await this.hashPassword(updateUserDto.contrasena),
           }
         : {
-            ...updateUsuarioDto,
-            ...(updateUsuarioDto.rut
+            ...updateUserDto,
+            ...(updateUserDto.rut
               ? {
-                  rut: normalizeRut(updateUsuarioDto.rut) ?? updateUsuarioDto.rut,
+                  rut: normalizeRut(updateUserDto.rut) ?? updateUserDto.rut,
                 }
               : {}),
           };
@@ -156,8 +156,8 @@ export class UsuariosService {
     }
   }
 
-  async eliminar(id: number) {
-    await this.obtenerPorId(id);
+  async remove(id: number) {
+    await this.findById(id);
 
     try {
       const user = await this.prisma.usuario.delete({
@@ -181,11 +181,11 @@ export class UsuariosService {
     }
   }
 
-  async asegurarExistencia(id: number) {
-    return this.obtenerPorId(id);
+  async ensureExists(id: number) {
+    return this.findById(id);
   }
 
-  async buscarPorCorreo(email: string) {
+  async findByEmail(email: string) {
     return this.prisma.usuario.findUnique({
       where: { email },
       include: {
@@ -194,7 +194,7 @@ export class UsuariosService {
     });
   }
 
-  buscarContextoAutenticacionPorId(id: number) {
+  findAuthContextById(id: number) {
     return this.prisma.usuario.findUnique({
       where: { id },
       select: {
@@ -207,7 +207,7 @@ export class UsuariosService {
     });
   }
 
-  validarContrasena(
+  validatePassword(
     contrasenaPlano: string,
     contrasenaHash: string,
   ): Promise<boolean> {
@@ -248,8 +248,8 @@ export class UsuariosService {
     return technicalArea.id;
   }
 
-  private buildWhereFilter(filtros: FiltroUsuariosDto): Prisma.UsuarioWhereInput {
-    const search = filtros.busqueda?.trim();
+  private buildWhereFilter(filters: FiltroUsuariosDto): Prisma.UsuarioWhereInput {
+    const search = filters.busqueda?.trim();
     const normalizedRut = normalizeRut(search);
     const rutFilter: Prisma.UsuarioWhereInput | undefined = search
       ? {
@@ -264,10 +264,10 @@ export class UsuariosService {
     );
 
     return {
-      ...(filtros.rol ? { rol: filtros.rol } : {}),
-      ...(filtros.areaId ? { areaId: filtros.areaId } : {}),
-      ...(typeof filtros.activo === 'boolean'
-        ? { activo: filtros.activo }
+      ...(filters.rol ? { rol: filters.rol } : {}),
+      ...(filters.areaId ? { areaId: filters.areaId } : {}),
+      ...(typeof filters.activo === 'boolean'
+        ? { activo: filters.activo }
         : {}),
       ...(search
         ? {

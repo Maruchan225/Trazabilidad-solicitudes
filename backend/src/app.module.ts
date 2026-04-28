@@ -5,7 +5,6 @@ import * as Joi from 'joi';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AdjuntosModule } from './adjuntos/adjuntos.module';
-import { AreasModule } from './areas/areas.module';
 import { AuthModule } from './autenticacion/auth.module';
 import { JwtAuthGuard } from './autenticacion/guardias/jwt-auth.guard';
 import { RolesGuard } from './autenticacion/guardias/roles.guard';
@@ -36,7 +35,6 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     }),
     AdjuntosModule,
     AuthModule,
-    AreasModule,
     HistorialSolicitudesModule,
     PrismaModule,
     ReportesModule,

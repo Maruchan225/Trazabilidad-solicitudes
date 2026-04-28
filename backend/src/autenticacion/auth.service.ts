@@ -11,14 +11,14 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async iniciarSesion(loginDto: LoginDto) {
-    const user = await this.usuariosService.buscarPorCorreo(loginDto.email);
+  async login(loginDto: LoginDto) {
+    const user = await this.usuariosService.findByEmail(loginDto.email);
 
     if (!user || !user.activo) {
       throw new UnauthorizedException('Credenciales invalidas');
     }
 
-    const isPasswordValid = await this.usuariosService.validarContrasena(
+    const isPasswordValid = await this.usuariosService.validatePassword(
       loginDto.contrasena,
       user.contrasena,
     );

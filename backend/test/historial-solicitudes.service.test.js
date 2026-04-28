@@ -6,7 +6,7 @@ const { HistorialSolicitudesService } = require(
   '../dist/src/historial-solicitudes/historial-solicitudes.service.js'
 );
 
-test('HistorialSolicitudesService.listar sanea el usuario relacionado', async () => {
+test('HistorialSolicitudesService.list sanea el usuario relacionado', async () => {
   let findManyArgs;
 
   const prisma = {
@@ -19,12 +19,12 @@ test('HistorialSolicitudesService.listar sanea el usuario relacionado', async ()
   };
 
   const service = new HistorialSolicitudesService(prisma);
-  await service.listar();
+  await service.list();
 
   assert.equal(findManyArgs.include.usuario.omit.contrasena, true);
 });
 
-test('HistorialSolicitudesService.listarPorSolicitud limita visibilidad del trabajador al responsable asignado', async () => {
+test('HistorialSolicitudesService.listByRequest limita visibilidad del trabajador al responsable asignado', async () => {
   let findManyArgs;
 
   const prisma = {
@@ -37,7 +37,7 @@ test('HistorialSolicitudesService.listarPorSolicitud limita visibilidad del trab
   };
 
   const service = new HistorialSolicitudesService(prisma);
-  await service.listarPorSolicitud(22, {
+  await service.listByRequest(22, {
     id: 7,
     correo: 'trabajador@demo.cl',
     rol: 'TRABAJADOR',

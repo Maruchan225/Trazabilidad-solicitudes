@@ -43,12 +43,6 @@ export function handlePrismaError(error: unknown, entityName: string): never {
       );
     }
 
-    if (entityName === 'area') {
-      throw new ConflictException(
-        'No se puede eliminar el area porque tiene registros asociados',
-      );
-    }
-
     if (entityName === 'tipo de solicitud') {
       throw new ConflictException(
         'No se puede eliminar el tipo de solicitud porque tiene solicitudes asociadas',

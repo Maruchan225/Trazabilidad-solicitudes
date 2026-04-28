@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { EstadoSolicitud, PrioridadSolicitud, RolUsuario } = require('@prisma/client');
 const { SolicitudesService } = require('../dist/src/solicitudes/solicitudes.service.js');
 
-test('SolicitudesService.listar conserva visibilidad del trabajador aun con busqueda', async () => {
+test('SolicitudesService.list conserva visibilidad del trabajador aun con busqueda', async () => {
   let findManyArgs;
 
   const prisma = {
@@ -25,7 +25,7 @@ test('SolicitudesService.listar conserva visibilidad del trabajador aun con busq
 
   const service = new SolicitudesService(prisma);
 
-  await service.listar(
+  await service.list(
     {
       id: 7,
       correo: 'trabajador@demo.cl',
@@ -50,7 +50,7 @@ test('SolicitudesService.listar conserva visibilidad del trabajador aun con busq
   );
 });
 
-test('SolicitudesService.cerrarSolicitud exige estado FINALIZADA', async () => {
+test('SolicitudesService.closeRequest exige estado FINALIZADA', async () => {
   const prisma = {
     usuario: {
       findUnique: async () => ({
@@ -84,7 +84,7 @@ test('SolicitudesService.cerrarSolicitud exige estado FINALIZADA', async () => {
   const service = new SolicitudesService(prisma);
 
   await assert.rejects(
-    service.cerrarSolicitud(
+    service.closeRequest(
       9,
       { comentario: 'Cerrar' },
       { id: 1, correo: 'encargado@demo.cl', rol: RolUsuario.ENCARGADO, areaId: 1 },
@@ -93,7 +93,7 @@ test('SolicitudesService.cerrarSolicitud exige estado FINALIZADA', async () => {
   );
 });
 
-test('SolicitudesService.cambiarEstadoSolicitud no permite cambios si la solicitud ya fue finalizada', async () => {
+test('SolicitudesService.changeRequestStatus no permite cambios si la solicitud ya fue finalizada', async () => {
   const prisma = {
     usuario: {
       findUnique: async () => ({
@@ -126,7 +126,7 @@ test('SolicitudesService.cambiarEstadoSolicitud no permite cambios si la solicit
   const service = new SolicitudesService(prisma);
 
   await assert.rejects(
-    service.cambiarEstadoSolicitud(
+    service.changeRequestStatus(
       12,
       {
         estado: EstadoSolicitud.EN_PROCESO,
@@ -143,7 +143,7 @@ test('SolicitudesService.cambiarEstadoSolicitud no permite cambios si la solicit
   );
 });
 
-test('SolicitudesService.cambiarEstadoSolicitud permite a un encargado actualizar una solicitud finalizada', async () => {
+test('SolicitudesService.changeRequestStatus permite a un encargado update una solicitud finalizada', async () => {
   let estadoActualizado;
   let historialCreado;
 
@@ -193,9 +193,9 @@ test('SolicitudesService.cambiarEstadoSolicitud permite a un encargado actualiza
   };
 
   const service = new SolicitudesService(prisma);
-  service.verDetalle = async () => ({ id: 15, estadoActual: EstadoSolicitud.EN_PROCESO });
+  service.getDetails = async () => ({ id: 15, estadoActual: EstadoSolicitud.EN_PROCESO });
 
-  await service.cambiarEstadoSolicitud(
+  await service.changeRequestStatus(
     15,
     {
       estado: EstadoSolicitud.EN_PROCESO,
@@ -215,7 +215,7 @@ test('SolicitudesService.cambiarEstadoSolicitud permite a un encargado actualiza
   assert.equal(historialCreado.estadoDestino, EstadoSolicitud.EN_PROCESO);
 });
 
-test('SolicitudesService.cambiarEstadoSolicitud permite a gestion marcar una solicitud como FINALIZADA', async () => {
+test('SolicitudesService.changeRequestStatus permite a gestion marcar una solicitud como FINALIZADA', async () => {
   let estadoActualizado;
   let historialCreado;
 
@@ -265,9 +265,9 @@ test('SolicitudesService.cambiarEstadoSolicitud permite a gestion marcar una sol
   };
 
   const service = new SolicitudesService(prisma);
-  service.verDetalle = async () => ({ id: 18, estadoActual: EstadoSolicitud.FINALIZADA });
+  service.getDetails = async () => ({ id: 18, estadoActual: EstadoSolicitud.FINALIZADA });
 
-  await service.cambiarEstadoSolicitud(
+  await service.changeRequestStatus(
     18,
     {
       estado: EstadoSolicitud.FINALIZADA,
@@ -287,7 +287,7 @@ test('SolicitudesService.cambiarEstadoSolicitud permite a gestion marcar una sol
   assert.equal(historialCreado.estadoDestino, EstadoSolicitud.FINALIZADA);
 });
 
-test('SolicitudesService.listar aplica paginacion opcional sin perder filtros', async () => {
+test('SolicitudesService.list aplica paginacion opcional sin perder filtros', async () => {
   let findManyArgs;
 
   const prisma = {
@@ -307,7 +307,7 @@ test('SolicitudesService.listar aplica paginacion opcional sin perder filtros', 
 
   const service = new SolicitudesService(prisma);
 
-  await service.listar(
+  await service.list(
     {
       id: 1,
       correo: 'encargado@demo.cl',
@@ -326,7 +326,7 @@ test('SolicitudesService.listar aplica paginacion opcional sin perder filtros', 
   assert.equal(findManyArgs.where.AND[1].prioridad, PrioridadSolicitud.MEDIA);
 });
 
-test('SolicitudesService.listar utiliza includes seguros para usuarios relacionados', async () => {
+test('SolicitudesService.list utiliza includes seguros para usuarios relacionados', async () => {
   let findManyArgs;
 
   const prisma = {
@@ -346,7 +346,7 @@ test('SolicitudesService.listar utiliza includes seguros para usuarios relaciona
 
   const service = new SolicitudesService(prisma);
 
-  await service.listar(
+  await service.list(
     {
       id: 1,
       correo: 'encargado@demo.cl',

@@ -27,11 +27,11 @@ function crearSolicitudVisible() {
   };
 }
 
-test('AdjuntosService.subirAdjunto rechaza archivos ausentes', async () => {
+test('AdjuntosService.uploadAttachment rechaza archivos ausentes', async () => {
   const service = new AdjuntosService({});
 
   await assert.rejects(
-    service.subirAdjunto(
+    service.uploadAttachment(
       12,
       undefined,
       { id: 8, correo: 'trabajador@demo.cl', rol: RolUsuario.TRABAJADOR, areaId: 5 },
@@ -42,7 +42,7 @@ test('AdjuntosService.subirAdjunto rechaza archivos ausentes', async () => {
   );
 });
 
-test('AdjuntosService.subirAdjunto registra adjunto e historial', async () => {
+test('AdjuntosService.uploadAttachment registra adjunto e historial', async () => {
   const registros = [];
   const solicitud = crearSolicitudVisible();
 
@@ -77,7 +77,7 @@ test('AdjuntosService.subirAdjunto registra adjunto e historial', async () => {
   };
 
   const service = new AdjuntosService(prisma);
-  const resultado = await service.subirAdjunto(
+  const resultado = await service.uploadAttachment(
     12,
     {
       originalname: 'informe final.pdf',
@@ -99,7 +99,7 @@ test('AdjuntosService.subirAdjunto registra adjunto e historial', async () => {
   assert.equal(registros[0].areaDestinoId, undefined);
 });
 
-test('AdjuntosService.eliminarAdjunto impide que un trabajador elimine archivos de otro usuario', async () => {
+test('AdjuntosService.removeAttachment impide que un trabajador elimine archivos de otro usuario', async () => {
   const prisma = {
     adjunto: {
       findFirst: async () => ({
@@ -116,7 +116,7 @@ test('AdjuntosService.eliminarAdjunto impide que un trabajador elimine archivos 
   const service = new AdjuntosService(prisma);
 
   await assert.rejects(
-    service.eliminarAdjunto(
+    service.removeAttachment(
       55,
       { id: 8, correo: 'trabajador@demo.cl', rol: RolUsuario.TRABAJADOR, areaId: 5 },
     ),
@@ -126,7 +126,7 @@ test('AdjuntosService.eliminarAdjunto impide que un trabajador elimine archivos 
   );
 });
 
-test('AdjuntosService.obtenerArchivoAdjunto informa cuando el archivo fisico ya no existe', async () => {
+test('AdjuntosService.getAttachmentFile informa cuando el archivo fisico ya no existe', async () => {
   const carpetaTemporal = fs.mkdtempSync(
     path.join(os.tmpdir(), 'adjuntos-test-'),
   );
@@ -149,7 +149,7 @@ test('AdjuntosService.obtenerArchivoAdjunto informa cuando el archivo fisico ya 
 
   try {
     await assert.rejects(
-      service.obtenerArchivoAdjunto(
+      service.getAttachmentFile(
         44,
         { id: 8, correo: 'trabajador@demo.cl', rol: RolUsuario.TRABAJADOR, areaId: 5 },
       ),

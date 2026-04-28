@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { RolUsuario } = require('@prisma/client');
 const { UsuariosService } = require('../dist/src/usuarios/usuarios.service.js');
 
-test('UsuariosService.crear normaliza el rut antes de persistir', async () => {
+test('UsuariosService.create normaliza el rut antes de persistir', async () => {
   let createArgs;
 
   const prisma = {
@@ -40,7 +40,7 @@ test('UsuariosService.crear normaliza el rut antes de persistir', async () => {
 
   const service = new UsuariosService(prisma);
 
-  await service.crear({
+  await service.create({
     nombres: 'Ana',
     apellidos: 'Perez',
     rut: '12.345.678-k',
@@ -55,7 +55,7 @@ test('UsuariosService.crear normaliza el rut antes de persistir', async () => {
   assert.notEqual(createArgs.data.contrasena, 'Demo1234!');
 });
 
-test('UsuariosService.crear resuelve un area tecnica por defecto cuando no se informa areaId', async () => {
+test('UsuariosService.create resuelve un area tecnica por defecto cuando no se informa areaId', async () => {
   let createArgs;
 
   const prisma = {
@@ -88,7 +88,7 @@ test('UsuariosService.crear resuelve un area tecnica por defecto cuando no se in
 
   const service = new UsuariosService(prisma);
 
-  await service.crear({
+  await service.create({
     nombres: 'Luis',
     apellidos: 'Rojas',
     rut: '11.111.111-1',
@@ -101,7 +101,7 @@ test('UsuariosService.crear resuelve un area tecnica por defecto cuando no se in
   assert.equal(createArgs.data.areaId, 4);
 });
 
-test('UsuariosService.listar incluye busqueda por rut normalizado', async () => {
+test('UsuariosService.list incluye busqueda por rut normalizado', async () => {
   let findManyArgs;
 
   const prisma = {
@@ -115,7 +115,7 @@ test('UsuariosService.listar incluye busqueda por rut normalizado', async () => 
 
   const service = new UsuariosService(prisma);
 
-  await service.listar({ busqueda: '12.345.678-k' });
+  await service.list({ busqueda: '12.345.678-k' });
 
   const filtroRut = findManyArgs.where.OR.find((item) => item.rut);
 
@@ -127,7 +127,7 @@ test('UsuariosService.listar incluye busqueda por rut normalizado', async () => 
   });
 });
 
-test('UsuariosService.listar aplica paginacion opcional', async () => {
+test('UsuariosService.list aplica paginacion opcional', async () => {
   let findManyArgs;
 
   const prisma = {
@@ -141,14 +141,14 @@ test('UsuariosService.listar aplica paginacion opcional', async () => {
 
   const service = new UsuariosService(prisma);
 
-  await service.listar({ limite: 20, offset: 40, rol: RolUsuario.TRABAJADOR });
+  await service.list({ limite: 20, offset: 40, rol: RolUsuario.TRABAJADOR });
 
   assert.equal(findManyArgs.take, 20);
   assert.equal(findManyArgs.skip, 40);
   assert.equal(findManyArgs.where.rol, RolUsuario.TRABAJADOR);
 });
 
-test('UsuariosService.eliminar retorna usuario saneado', async () => {
+test('UsuariosService.remove retorna usuario saneado', async () => {
   let deleteArgs;
 
   const prisma = {
@@ -185,7 +185,7 @@ test('UsuariosService.eliminar retorna usuario saneado', async () => {
   };
 
   const service = new UsuariosService(prisma);
-  const resultado = await service.eliminar(10);
+  const resultado = await service.remove(10);
 
   assert.equal(deleteArgs.omit.contrasena, true);
   assert.equal(deleteArgs.include.area, true);

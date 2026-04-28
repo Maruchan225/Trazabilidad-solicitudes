@@ -6,7 +6,7 @@ const { UnauthorizedException } = require('@nestjs/common');
 const { RolUsuario } = require('@prisma/client');
 const { AuthService } = require('../dist/src/autenticacion/auth.service.js');
 
-test('AuthService.iniciarSesion retorna token y usuario saneado', async () => {
+test('AuthService.login retorna token y usuario saneado', async () => {
   const usuario = {
     id: 3,
     email: 'trabajador@demo.cl',
@@ -20,11 +20,11 @@ test('AuthService.iniciarSesion retorna token y usuario saneado', async () => {
   };
 
   const usuariosService = {
-    buscarPorCorreo: async (email) => {
+    findByEmail: async (email) => {
       assert.equal(email, 'trabajador@demo.cl');
       return usuario;
     },
-    validarContrasena: async (contrasenaPlano, contrasenaHash) => {
+    validatePassword: async (contrasenaPlano, contrasenaHash) => {
       assert.equal(contrasenaPlano, 'Demo1234!');
       assert.equal(contrasenaHash, 'hash-demo');
       return true;
@@ -45,7 +45,7 @@ test('AuthService.iniciarSesion retorna token y usuario saneado', async () => {
   };
 
   const service = new AuthService(usuariosService, jwtService);
-  const resultado = await service.iniciarSesion({
+  const resultado = await service.login({
     email: 'trabajador@demo.cl',
     contrasena: 'Demo1234!',
   });
@@ -64,11 +64,11 @@ test('AuthService.iniciarSesion retorna token y usuario saneado', async () => {
   });
 });
 
-test('AuthService.iniciarSesion rechaza usuarios ausentes o inactivos', async () => {
+test('AuthService.login rechaza usuarios ausentes o inactivos', async () => {
   const service = new AuthService(
     {
-      buscarPorCorreo: async () => null,
-      validarContrasena: async () => true,
+      findByEmail: async () => null,
+      validatePassword: async () => true,
     },
     {
       signAsync: async () => 'token-demo',
@@ -76,7 +76,7 @@ test('AuthService.iniciarSesion rechaza usuarios ausentes o inactivos', async ()
   );
 
   await assert.rejects(
-    service.iniciarSesion({
+    service.login({
       email: 'nadie@demo.cl',
       contrasena: 'Demo1234!',
     }),
@@ -86,10 +86,10 @@ test('AuthService.iniciarSesion rechaza usuarios ausentes o inactivos', async ()
   );
 });
 
-test('AuthService.iniciarSesion rechaza contrasenas invalidas', async () => {
+test('AuthService.login rechaza contrasenas invalidas', async () => {
   const service = new AuthService(
     {
-      buscarPorCorreo: async () => ({
+      findByEmail: async () => ({
         id: 5,
         email: 'encargado@demo.cl',
         contrasena: 'hash-demo',
@@ -100,7 +100,7 @@ test('AuthService.iniciarSesion rechaza contrasenas invalidas', async () => {
         nombres: 'Juan',
         apellidos: 'Diaz',
       }),
-      validarContrasena: async () => false,
+      validatePassword: async () => false,
     },
     {
       signAsync: async () => 'token-demo',
@@ -108,7 +108,7 @@ test('AuthService.iniciarSesion rechaza contrasenas invalidas', async () => {
   );
 
   await assert.rejects(
-    service.iniciarSesion({
+    service.login({
       email: 'encargado@demo.cl',
       contrasena: 'Incorrecta123!',
     }),

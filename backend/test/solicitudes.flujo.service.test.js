@@ -224,10 +224,10 @@ function crearPrismaFlujoSolicitudes() {
   return { prisma, estado, snapshotSolicitud };
 }
 
-test('SolicitudesService cubre el flujo principal de crear, asignar, derivar a usuario, finalizar y cerrar', async () => {
+test('SolicitudesService cubre el flujo principal de create, asignar, derivar a usuario, finalizar y cerrar', async () => {
   const { prisma, estado, snapshotSolicitud } = crearPrismaFlujoSolicitudes();
   const service = new SolicitudesService(prisma);
-  service.verDetalle = async () => snapshotSolicitud();
+  service.getDetails = async () => snapshotSolicitud();
 
   const encargado = {
     id: 1,
@@ -242,7 +242,7 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar a u
     areaId: 2,
   };
 
-  await service.crear(
+  await service.create(
     {
       numeroSolicitud: 'DOM-2026-001',
       titulo: 'Solicitud de retiro de escombros',
@@ -258,13 +258,13 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar a u
 
   const solicitudId = estado.solicitud.id;
 
-  await service.asignarSolicitud(
+  await service.assignRequest(
     solicitudId,
     { asignadoAId: 4, comentario: 'Reasignacion operativa inicial' },
     encargado,
   );
 
-  await service.derivarSolicitudAUsuario(
+  await service.transferRequestToUser(
     solicitudId,
     {
       asignadoAId: 3,
@@ -273,7 +273,7 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar a u
     encargado,
   );
 
-  await service.cambiarEstadoSolicitud(
+  await service.changeRequestStatus(
     solicitudId,
     {
       estado: EstadoSolicitud.EN_PROCESO,
@@ -282,13 +282,13 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar a u
     trabajadorDestino,
   );
 
-  await service.finalizarSolicitud(
+  await service.finalizeRequest(
     solicitudId,
     { comentario: 'Trabajo ejecutado' },
     trabajadorDestino,
   );
 
-  await service.cerrarSolicitud(
+  await service.closeRequest(
     solicitudId,
     { comentario: 'Cierre conforme' },
     encargado,
@@ -315,12 +315,12 @@ test('SolicitudesService cubre el flujo principal de crear, asignar, derivar a u
   );
 });
 
-test('SolicitudesService.crear calcula la fecha de vencimiento desde el SLA del tipo', async () => {
+test('SolicitudesService.create calcula la fecha de vencimiento desde el SLA del tipo', async () => {
   const { prisma, estado } = crearPrismaFlujoSolicitudes();
   const service = new SolicitudesService(prisma);
   const ahora = Date.now();
 
-  await service.crear(
+  await service.create(
     {
       numeroSolicitud: 'DOM-2026-002',
       titulo: 'Solicitud con vencimiento automatico',
@@ -347,11 +347,11 @@ test('SolicitudesService.crear calcula la fecha de vencimiento desde el SLA del 
   assert.ok(diferenciaMs <= unDiaMs + 5_000);
 });
 
-test('SolicitudesService.crear permite omitir numeroSolicitud y usa correlativo como identificador operativo', async () => {
+test('SolicitudesService.create permite omitir numeroSolicitud y usa correlativo como identificador operativo', async () => {
   const { prisma, estado } = crearPrismaFlujoSolicitudes();
   const service = new SolicitudesService(prisma);
 
-  await service.crear(
+  await service.create(
     {
       titulo: 'Solicitud sin numero externo',
       descripcion: 'Debe poder crearse sin numeroSolicitud manual.',
@@ -372,12 +372,12 @@ test('SolicitudesService.crear permite omitir numeroSolicitud y usa correlativo 
   assert.equal(estado.solicitud.numeroSolicitud, undefined);
 });
 
-test('SolicitudesService.crear exige responsable desde el alta', async () => {
+test('SolicitudesService.create exige responsable desde el alta', async () => {
   const { prisma } = crearPrismaFlujoSolicitudes();
   const service = new SolicitudesService(prisma);
 
   await assert.rejects(
-    service.crear(
+    service.create(
       {
         titulo: 'Solicitud sin responsable',
         descripcion: 'Debe rechazar cualquier solicitud nueva sin responsable.',
@@ -398,12 +398,12 @@ test('SolicitudesService.crear exige responsable desde el alta', async () => {
   );
 });
 
-test('SolicitudesService.crear rechaza tipos sin SLA configurado', async () => {
+test('SolicitudesService.create rechaza tipos sin SLA configurado', async () => {
   const { prisma } = crearPrismaFlujoSolicitudes();
   const service = new SolicitudesService(prisma);
 
   await assert.rejects(
-    service.crear(
+    service.create(
       {
       numeroSolicitud: 'DOM-2026-003',
       titulo: 'Solicitud sin SLA',
@@ -424,11 +424,11 @@ test('SolicitudesService.crear rechaza tipos sin SLA configurado', async () => {
   );
 });
 
-test('SolicitudesService.crear normaliza y valida numeroSolicitud en backend', async () => {
+test('SolicitudesService.create normaliza y valida numeroSolicitud en backend', async () => {
   const { prisma, estado } = crearPrismaFlujoSolicitudes();
   const service = new SolicitudesService(prisma);
 
-  await service.crear(
+  await service.create(
     {
       numeroSolicitud: '   DOM-2026-010   ',
       titulo: 'Solicitud con numero normalizado',
@@ -449,7 +449,7 @@ test('SolicitudesService.crear normaliza y valida numeroSolicitud en backend', a
   assert.equal(estado.solicitud.numeroSolicitud, 'DOM-2026-010');
 
   await assert.rejects(
-    service.crear(
+    service.create(
       {
         numeroSolicitud: '   ',
         titulo: 'Solicitud invalida',
@@ -472,12 +472,12 @@ test('SolicitudesService.crear normaliza y valida numeroSolicitud en backend', a
   );
 });
 
-test('SolicitudesService.derivarSolicitudAUsuario deriva solo por usuario y conserva el area tecnica actual', async () => {
+test('SolicitudesService.transferRequestToUser deriva solo por usuario y conserva el area tecnica actual', async () => {
   const { prisma, estado, snapshotSolicitud } = crearPrismaFlujoSolicitudes();
   const service = new SolicitudesService(prisma);
-  service.verDetalle = async () => snapshotSolicitud();
+  service.getDetails = async () => snapshotSolicitud();
 
-  await service.crear(
+  await service.create(
     {
       numeroSolicitud: 'DOM-2026-011',
       titulo: 'Solicitud para derivacion segura',
@@ -495,7 +495,7 @@ test('SolicitudesService.derivarSolicitudAUsuario deriva solo por usuario y cons
     },
   );
 
-  await service.derivarSolicitudAUsuario(
+  await service.transferRequestToUser(
     estado.solicitud.id,
     {
       asignadoAId: 3,
@@ -516,7 +516,7 @@ test('SolicitudesService.derivarSolicitudAUsuario deriva solo por usuario y cons
   assert.equal(estado.historial[0].areaDestinoId, undefined);
 });
 
-test('SolicitudesService.crear reintenta cuando ocurre un conflicto de correlativo', async () => {
+test('SolicitudesService.create reintenta cuando ocurre un conflicto de correlativo', async () => {
   let intentoCreate = 0;
   let historialCreado = false;
   let maxCorrelativo = 0;
@@ -615,9 +615,9 @@ test('SolicitudesService.crear reintenta cuando ocurre un conflicto de correlati
   };
 
   const service = new SolicitudesService(prisma);
-  service.verDetalle = async () => ({ id: 200 });
+  service.getDetails = async () => ({ id: 200 });
 
-  await service.crear(
+  await service.create(
     {
       numeroSolicitud: 'DOM-2026-020',
       titulo: 'Solicitud con retry',
@@ -661,7 +661,7 @@ test('SolicitudesService impide que un trabajador no asignado opere una solicitu
   const service = new SolicitudesService(prisma);
 
   await assert.rejects(
-    service.cambiarEstadoSolicitud(
+    service.changeRequestStatus(
       77,
       { estado: EstadoSolicitud.EN_PROCESO, comentario: 'Intento no valido' },
       {

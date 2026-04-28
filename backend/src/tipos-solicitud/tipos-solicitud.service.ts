@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTipoSolicitudDto } from './dto/create-tipo-solicitud.dto';
-import { UpdateTipoSolicitudDto } from './dto/update-tipo-solicitud.dto';
+import { CreateTipoSolicitudDto as CreateRequestTypeDto } from './dto/create-tipo-solicitud.dto';
+import { UpdateTipoSolicitudDto as UpdateRequestTypeDto } from './dto/update-tipo-solicitud.dto';
 
 @Injectable()
 export class TiposSolicitudService {
@@ -10,12 +10,12 @@ export class TiposSolicitudService {
   private readonly mensajeCatalogoSoloLectura =
     'Los tipos de solicitud se administran como configuracion inicial de DOM';
 
-  async crear(createTipoSolicitudDto: CreateTipoSolicitudDto) {
-    void createTipoSolicitudDto;
+  async create(createRequestTypeDto: CreateRequestTypeDto) {
+    void createRequestTypeDto;
     throw new ForbiddenException(this.mensajeCatalogoSoloLectura);
   }
 
-  listar() {
+  list() {
     return this.prisma.tipoSolicitud.findMany({
       orderBy: {
         nombre: 'asc',
@@ -23,7 +23,7 @@ export class TiposSolicitudService {
     });
   }
 
-  async obtenerPorId(id: number) {
+  async findById(id: number) {
     const tipoSolicitud = await this.prisma.tipoSolicitud.findUnique({
       where: { id },
     });
@@ -37,18 +37,18 @@ export class TiposSolicitudService {
     return tipoSolicitud;
   }
 
-  async actualizar(id: number, updateTipoSolicitudDto: UpdateTipoSolicitudDto) {
+  async update(id: number, updateRequestTypeDto: UpdateRequestTypeDto) {
     void id;
-    void updateTipoSolicitudDto;
+    void updateRequestTypeDto;
     throw new ForbiddenException(this.mensajeCatalogoSoloLectura);
   }
 
-  async eliminar(id: number) {
+  async remove(id: number) {
     void id;
     throw new ForbiddenException(this.mensajeCatalogoSoloLectura);
   }
 
-  async asegurarExistencia(id: number) {
-    return this.obtenerPorId(id);
+  async ensureExists(id: number) {
+    return this.findById(id);
   }
 }

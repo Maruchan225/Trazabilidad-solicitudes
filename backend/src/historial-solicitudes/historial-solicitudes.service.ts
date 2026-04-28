@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class HistorialSolicitudesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  listar() {
+  list() {
     return this.prisma.historialSolicitud.findMany({
       include: {
         solicitud: true,
@@ -22,7 +22,7 @@ export class HistorialSolicitudesService {
     });
   }
 
-  listarPorSolicitud(solicitudId: number, usuario: UsuarioToken) {
+  listByRequest(solicitudId: number, usuario: UsuarioToken) {
     return this.prisma.historialSolicitud.findMany({
       where: {
         solicitudId,
