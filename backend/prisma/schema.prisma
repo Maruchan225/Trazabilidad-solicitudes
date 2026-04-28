@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  MANAGER
+  SUBSTITUTE
+  WORKER
+}
+
+enum TicketStatus {
+  ENTERED
+  DERIVED
+  IN_PROGRESS
+  PENDING_INFORMATION
+  FINISHED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum InputChannel {
+  IN_PERSON
+  EMAIL
+}
+
+enum StorageType {
+  LOCAL
+  GOOGLE_DRIVE
+}
+
+enum TicketHistoryAction {
+  CREATED
+  UPDATED
+  ASSIGNED
+  DERIVED
+  STATUS_CHANGED
+  COMMENT_ADDED
+  ATTACHMENT_ADDED
+  SLA_UPDATED
+  DUE_DATE_UPDATED
+  FINISHED
+  CLOSED
+  REOPENED
+}
+
+model User {
+  id                   String             @id @default(cuid())
+  name                 String
+  rut                  String?            @unique
+  email                String             @unique
+  passwordHash         String
+  role                 UserRole
+  enabled              Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  assignedTickets      Ticket[]           @relation("AssignedTickets")
+  createdTickets       Ticket[]           @relation("CreatedTickets")
+  closedTickets        Ticket[]           @relation("ClosedTickets")
+  derivationsFrom      TicketDerivation[] @relation("DerivationsFrom")
+  derivationsTo        TicketDerivation[] @relation("DerivationsTo")
+  performedDerivations TicketDerivation[] @relation("PerformedDerivations")
+  histories            TicketHistory[]
+  comments             TicketComment[]
+  attachments          TicketAttachment[]
+}
+
+model TicketType {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  slaDays     Int
+  active      Boolean  @default(true) @map("enabled")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tickets     Ticket[]
+}
+
+model Ticket {
+  id             String             @id @default(cuid())
+  correlative    Int                @unique @default(autoincrement())
+  code           String?            @unique @map("ticketCode")
+  title          String
+  description    String
+  priority       Priority
+  status         TicketStatus       @default(ENTERED)
+  inputChannel   InputChannel
+  ticketTypeId   String
+  requesterName  String?
+  requesterEmail String?
+  requesterPhone String?
+  assignedToId   String
+  createdById    String
+  closedById     String?
+  appliedSlaDays Int
+  dueDate        DateTime
+  finishedAt     DateTime?
+  closedAt       DateTime?
+  enabled        Boolean            @default(true)
+  deleted        Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  ticketType     TicketType         @relation(fields: [ticketTypeId], references: [id])
+  assignedTo     User               @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  createdBy      User               @relation("CreatedTickets", fields: [createdById], references: [id])
+  closedBy       User?              @relation("ClosedTickets", fields: [closedById], references: [id])
+  derivations    TicketDerivation[]
+  histories      TicketHistory[]
+  comments       TicketComment[]
+  attachments    TicketAttachment[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([inputChannel])
+  @@index([assignedToId])
+  @@index([ticketTypeId])
+  @@index([createdAt])
+  @@index([dueDate])
+  @@index([deleted, createdAt])
+}
+
+model TicketDerivation {
+  id             String       @id @default(cuid())
+  ticketId       String
+  fromUserId     String
+  toUserId       String
+  performedById  String
+  observation    String?
+  previousStatus TicketStatus
+  newStatus      TicketStatus
+  createdAt      DateTime     @default(now())
+  ticket         Ticket       @relation(fields: [ticketId], references: [id])
+  fromUser       User         @relation("DerivationsFrom", fields: [fromUserId], references: [id])
+  toUser         User         @relation("DerivationsTo", fields: [toUserId], references: [id])
+  performedBy    User         @relation("PerformedDerivations", fields: [performedById], references: [id])
+}
+
+model TicketHistory {
+  id                 String              @id @default(cuid())
+  ticketId           String
+  userId             String
+  action             TicketHistoryAction
+  previousStatus     TicketStatus?
+  newStatus          TicketStatus?
+  previousAssigneeId String?
+  newAssigneeId      String?
+  details            Json?
+  createdAt          DateTime            @default(now())
+  ticket             Ticket              @relation(fields: [ticketId], references: [id])
+  user               User                @relation(fields: [userId], references: [id])
+}
+
+model TicketComment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  userId    String
+  content   String
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model TicketAttachment {
+  id           String      @id @default(cuid())
+  ticketId     String
+  uploadedById String
+  fileName     String
+  originalName String
+  mimeType     String
+  size         Int
+  storageType  StorageType @default(LOCAL)
+  path         String?     @map("localPath")
+  driveFileId  String?
+  url          String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deleted      Boolean     @default(false)
+  ticket       Ticket      @relation(fields: [ticketId], references: [id])
+  uploadedBy   User        @relation(fields: [uploadedById], references: [id])
+}

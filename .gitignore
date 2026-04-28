@@ -1,0 +1,6 @@
+referencia-repo/
+
+node_modules/
+dist/
+.env
+uploads/
