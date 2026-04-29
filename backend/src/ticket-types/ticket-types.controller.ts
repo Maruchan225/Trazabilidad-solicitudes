@@ -13,13 +13,13 @@ export class TicketTypesController {
   constructor(private readonly ticketTypesService: TicketTypesService) {}
 
   @Get()
-  @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE)
+  @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE, UserRole.SECRETARY)
   findAllTicketTypes() {
     return this.ticketTypesService.findAllTicketTypes();
   }
 
   @Get(':id')
-  @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE)
+  @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE, UserRole.SECRETARY)
   findTicketTypeById(@Param('id') id: string) {
     return this.ticketTypesService.findTicketTypeById(id);
   }

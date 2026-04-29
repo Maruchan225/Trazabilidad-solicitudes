@@ -106,6 +106,7 @@ export function UsersPage() {
         summaryCards={[
           { title: 'Total', value: users.length },
           { title: 'Activos', value: users.filter((user) => user.enabled).length },
+          { title: 'Secretarios/as', value: users.filter((user) => user.role === 'SECRETARY').length },
           { title: 'Trabajadores', value: users.filter((user) => user.role === 'WORKER').length },
         ]}
         actions={<Button type="primary" icon={<Icon name="add" />} onClick={openCreateModal}>Nuevo usuario</Button>}

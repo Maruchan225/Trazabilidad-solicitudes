@@ -8,7 +8,7 @@ import { ModulePage } from '../components/ModulePage';
 import { PriorityTag, StatusTag } from '../components/StatusTags';
 import { ticketTypesService, ticketsService, usersService } from '../services/api';
 import type { InputChannel, Priority, Ticket, TicketFilters, TicketStatus, TicketType, User } from '../types/domain';
-import { inputChannelLabels, isManagementRole, priorityLabels, statusLabels } from '../types/domain';
+import { inputChannelLabels, isTicketCoordinatorRole, priorityLabels, statusLabels } from '../types/domain';
 import { dueStatusColors } from '../utils/colors';
 import { formatDate } from '../utils/formatters';
 import { getTicketDueStatus, isTicketOverdue } from '../utils/tickets';
@@ -18,6 +18,8 @@ type Columns<T> = NonNullable<TableProps<T>['columns']>;
 
 const searchDelayMs = 300;
 const overdueFilterValue = 'OVERDUE';
+const nearDueFilterValue = 'NEAR_DUE';
+const onTimeFilterValue = 'ON_TIME';
 type TicketSortField = 'createdAt' | 'dueDate';
 type TicketTray = NonNullable<TicketFilters['tray']>;
 
@@ -70,6 +72,8 @@ function readFilters(searchParams: URLSearchParams): TicketFilters {
     priority: (searchParams.get('priority') as Priority | null) || undefined,
     inputChannel: (searchParams.get('inputChannel') as InputChannel | null) || undefined,
     overdue: searchParams.get('overdue') === 'true' || undefined,
+    nearDue: searchParams.get('nearDue') === 'true' || undefined,
+    onTime: searchParams.get('onTime') === 'true' || undefined,
     sortBy: (searchParams.get('sortBy') as TicketSortField | null) || undefined,
     sortOrder: (searchParams.get('sortOrder') as 'asc' | 'desc' | null) || undefined,
   };
@@ -90,7 +94,7 @@ export function TicketsPage() {
   const initialFilters = readFilters(searchParams);
   const { session } = useAuth();
   const currentUser = session?.user;
-  const canManage = isManagementRole(currentUser?.role);
+  const canCoordinateTickets = isTicketCoordinatorRole(currentUser?.role);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [totalTickets, setTotalTickets] = useState(0);
   const [trayCounts, setTrayCounts] = useState<Record<TicketTray, number>>({
@@ -113,6 +117,8 @@ export function TicketsPage() {
   const [priorityFilter, setPriorityFilter] = useState<Priority | undefined>(initialFilters.priority);
   const [inputChannelFilter, setInputChannelFilter] = useState<InputChannel | undefined>(initialFilters.inputChannel);
   const [overdueFilter, setOverdueFilter] = useState<boolean | undefined>(initialFilters.overdue);
+  const [nearDueFilter, setNearDueFilter] = useState<boolean | undefined>(initialFilters.nearDue);
+  const [onTimeFilter, setOnTimeFilter] = useState<boolean | undefined>(initialFilters.onTime);
   const [sortBy, setSortBy] = useState<TicketSortField | undefined>(initialFilters.sortBy);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | undefined>(initialFilters.sortOrder);
   const [form] = Form.useForm();
@@ -120,7 +126,7 @@ export function TicketsPage() {
 
   const activeTicketTypes = useMemo(() => ticketTypes.filter((ticketType) => ticketType.active), [ticketTypes]);
   const workers = useMemo(() => users.filter((user) => user.enabled && user.role === 'WORKER'), [users]);
-  const hasActiveFilters = Boolean(appliedSearch || priorityFilter || inputChannelFilter || overdueFilter || (canFilterByStatus && statusFilter));
+  const hasActiveFilters = Boolean(appliedSearch || priorityFilter || inputChannelFilter || overdueFilter || nearDueFilter || onTimeFilter || (canFilterByStatus && statusFilter));
   const emptyText = hasActiveFilters ? 'No se encontraron solicitudes con los filtros aplicados.' : emptyTextByTray[trayFilter];
   const trayCountFilters = useMemo<TicketFilters>(
     () => ({
@@ -128,8 +134,10 @@ export function TicketsPage() {
       priority: priorityFilter,
       inputChannel: inputChannelFilter,
       overdue: overdueFilter,
+      nearDue: nearDueFilter,
+      onTime: onTimeFilter,
     }),
-    [appliedSearch, priorityFilter, inputChannelFilter, overdueFilter],
+    [appliedSearch, priorityFilter, inputChannelFilter, overdueFilter, nearDueFilter, onTimeFilter],
   );
   const filters = useMemo<TicketFilters>(
     () => ({
@@ -141,10 +149,12 @@ export function TicketsPage() {
       priority: priorityFilter,
       inputChannel: inputChannelFilter,
       overdue: overdueFilter,
+      nearDue: nearDueFilter,
+      onTime: onTimeFilter,
       sortBy,
       sortOrder,
     }),
-    [appliedSearch, page, pageSize, trayFilter, canFilterByStatus, statusFilter, priorityFilter, inputChannelFilter, overdueFilter, sortBy, sortOrder],
+    [appliedSearch, page, pageSize, trayFilter, canFilterByStatus, statusFilter, priorityFilter, inputChannelFilter, overdueFilter, nearDueFilter, onTimeFilter, sortBy, sortOrder],
   );
 
   async function loadBaseData() {
@@ -170,11 +180,11 @@ export function TicketsPage() {
 
   useEffect(() => {
     void loadBaseData();
-  }, [canManage, filters]);
+  }, [canCoordinateTickets, filters]);
 
   useEffect(() => {
     void loadTrayCounts();
-  }, [canManage, trayCountFilters]);
+  }, [canCoordinateTickets, trayCountFilters]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setAppliedSearch(searchText.trim()), searchDelayMs);
@@ -196,6 +206,8 @@ export function TicketsPage() {
     setPriorityFilter(undefined);
     setInputChannelFilter(undefined);
     setOverdueFilter(undefined);
+    setNearDueFilter(undefined);
+    setOnTimeFilter(undefined);
     setSortBy(undefined);
     setSortOrder(undefined);
   }
@@ -204,7 +216,7 @@ export function TicketsPage() {
     setTicketModalOpen(true);
     const promises: Promise<unknown>[] = [];
     if (!ticketTypes.length) promises.push(ticketTypesService.listTicketTypes().then(setTicketTypes));
-    if (canManage && !users.length) promises.push(usersService.listUsers().then(setUsers));
+    if (canCoordinateTickets && !users.length) promises.push(usersService.listUsers().then(setUsers));
     await Promise.all(promises);
   }
 
@@ -269,7 +281,7 @@ export function TicketsPage() {
     <>
       <ModulePage
         title="Solicitudes"
-        description={canManage ? 'Seguimiento global de solicitudes DOM.' : 'Solicitudes asignadas a su usuario.'}
+        description={canCoordinateTickets ? 'Seguimiento global de solicitudes DOM.' : 'Solicitudes asignadas a su usuario.'}
         summaryCards={[
           { title: 'Total', value: totalTickets },
           { title: 'En pagina', value: tickets.length },
@@ -277,7 +289,7 @@ export function TicketsPage() {
           { title: 'Finalizadas pagina', value: tickets.filter((ticket) => ticket.status === 'FINISHED').length },
           { title: 'Cerradas pagina', value: tickets.filter((ticket) => ticket.status === 'CLOSED').length },
         ]}
-        actions={canManage ? <Button type="primary" icon={<Icon name="add" />} onClick={() => void openCreateTicketModal()}>Nueva solicitud</Button> : null}
+        actions={canCoordinateTickets ? <Button type="primary" icon={<Icon name="add" />} onClick={() => void openCreateTicketModal()}>Nueva solicitud</Button> : null}
       >
         <Tabs
           activeKey={trayFilter}
@@ -343,10 +355,16 @@ export function TicketsPage() {
               allowClear
               className="filter-control"
               placeholder="Filtrar plazo"
-              value={overdueFilter ? overdueFilterValue : undefined}
-              options={[{ value: overdueFilterValue, label: 'Vencidas' }]}
+              value={overdueFilter ? overdueFilterValue : nearDueFilter ? nearDueFilterValue : onTimeFilter ? onTimeFilterValue : undefined}
+              options={[
+                { value: overdueFilterValue, label: 'Vencidas' },
+                { value: nearDueFilterValue, label: 'Proxima a vencer' },
+                { value: onTimeFilterValue, label: 'En plazo' },
+              ]}
               onChange={(value) => {
                 setOverdueFilter(value === overdueFilterValue ? true : undefined);
+                setNearDueFilter(value === nearDueFilterValue ? true : undefined);
+                setOnTimeFilter(value === onTimeFilterValue ? true : undefined);
                 setPage(1);
               }}
             />
@@ -394,7 +412,11 @@ export function TicketsPage() {
             <Select options={activeTicketTypes.map((ticketType) => ({ value: ticketType.id, label: ticketType.name }))} />
           </Form.Item>
           <Form.Item name="assignedToId" label="Responsable" rules={[{ required: true, message: 'Seleccione el responsable' }]}>
-            <Select options={workers.map((user) => ({ value: user.id, label: user.name }))} />
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={workers.map((user) => ({ value: user.id, label: `${user.name} - ${user.rut ?? user.email}` }))}
+            />
           </Form.Item>
         </Form>
       </Modal>

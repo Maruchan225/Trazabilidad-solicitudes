@@ -1,4 +1,4 @@
-export type UserRole = 'MANAGER' | 'SUBSTITUTE' | 'WORKER';
+export type UserRole = 'MANAGER' | 'SUBSTITUTE' | 'SECRETARY' | 'WORKER';
 export type TicketStatus = 'ENTERED' | 'DERIVED' | 'IN_PROGRESS' | 'PENDING_INFORMATION' | 'FINISHED' | 'CLOSED';
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 export type InputChannel = 'EMAIL' | 'IN_PERSON';
@@ -143,6 +143,7 @@ export type TicketFilters = {
   sortOrder?: 'asc' | 'desc';
   overdue?: boolean;
   nearDue?: boolean;
+  onTime?: boolean;
 };
 
 export type PaginatedResult<T> = {
@@ -174,6 +175,7 @@ export type CreateTicketTypePayload = {
 export const roleLabels: Record<UserRole, string> = {
   MANAGER: 'Encargado',
   SUBSTITUTE: 'Suplente',
+  SECRETARY: 'Secretario/a',
   WORKER: 'Trabajador',
 };
 
@@ -200,4 +202,12 @@ export const inputChannelLabels: Record<InputChannel, string> = {
 
 export function isManagementRole(role?: UserRole) {
   return role === 'MANAGER' || role === 'SUBSTITUTE';
+}
+
+export function isTicketCoordinatorRole(role?: UserRole) {
+  return role === 'MANAGER' || role === 'SUBSTITUTE' || role === 'SECRETARY';
+}
+
+export function canResolveTickets(role?: UserRole) {
+  return role === 'MANAGER' || role === 'SUBSTITUTE' || role === 'WORKER';
 }

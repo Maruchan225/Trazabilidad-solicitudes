@@ -77,4 +77,9 @@ export class TicketFiltersDto {
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   nearDue?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  onTime?: boolean;
 }

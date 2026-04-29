@@ -17,6 +17,6 @@ export function PriorityTag({ priority }: { priority: Priority }) {
 
 export function RoleTag({ role }: { role?: UserRole }) {
   if (!role) return <Tag>Sin rol</Tag>;
-  const color = role === 'MANAGER' ? 'blue' : role === 'SUBSTITUTE' ? 'purple' : 'cyan';
+  const color = role === 'MANAGER' ? 'blue' : role === 'SUBSTITUTE' ? 'purple' : role === 'SECRETARY' ? 'gold' : 'cyan';
   return <Tag color={color}>{roleLabels[role]}</Tag>;
 }

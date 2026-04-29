@@ -12,6 +12,7 @@ import { TicketFiltersDto } from './dto/ticket-filters.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 
 const managerRoles: UserRole[] = [UserRole.MANAGER, UserRole.SUBSTITUTE];
+const ticketCoordinatorRoles: UserRole[] = [UserRole.MANAGER, UserRole.SUBSTITUTE, UserRole.SECRETARY];
 const terminalStatuses: TicketStatus[] = [TicketStatus.CLOSED, TicketStatus.FINISHED];
 
 @Injectable()
@@ -132,7 +133,7 @@ export class TicketsService {
   }
 
   async assignTicket(id: string, dto: AssignTicketDto, user: AuthenticatedUser) {
-    this.assertManager(user);
+    this.assertTicketCoordinator(user);
     const [ticket, assignee] = await Promise.all([this.findRawTicket(id), this.prisma.user.findUnique({ where: { id: dto.assignedToId } })]);
     this.assertTicketIsNotClosed(ticket);
     if (!assignee?.enabled) throw new BadRequestException('Assignee must be active');
@@ -191,6 +192,7 @@ export class TicketsService {
 
   async changeTicketStatus(id: string, dto: ChangeTicketStatusDto, user: AuthenticatedUser) {
     const ticket = await this.findRawTicket(id);
+    if (user.role === UserRole.SECRETARY) throw new ForbiddenException('Secretaries cannot change ticket status');
     if (ticket.status === TicketStatus.CLOSED) throw new BadRequestException('Closed tickets cannot change status');
     if (ticket.status === TicketStatus.FINISHED && dto.status !== TicketStatus.FINISHED && dto.status !== TicketStatus.CLOSED) throw new BadRequestException('Finished tickets must be closed or reopened');
     if (dto.status === TicketStatus.CLOSED && ticket.status !== TicketStatus.FINISHED) throw new BadRequestException('Tickets must be finished before closing');
@@ -310,6 +312,11 @@ export class TicketsService {
       limit.setDate(limit.getDate() + NEAR_DUE_DAYS);
       andConditions.push({ dueDate: { gte: new Date(), lte: limit }, status: { notIn: terminalStatuses } });
     }
+    if (filters.onTime) {
+      const limit = new Date();
+      limit.setDate(limit.getDate() + NEAR_DUE_DAYS);
+      andConditions.push({ dueDate: { gt: limit }, status: { notIn: terminalStatuses } });
+    }
     if (andConditions.length) where.AND = andConditions;
     return where;
   }
@@ -358,6 +365,10 @@ export class TicketsService {
 
   private assertManager(user: AuthenticatedUser) {
     if (!managerRoles.includes(user.role as UserRole)) throw new ForbiddenException('Manager permissions are required');
+  }
+
+  private assertTicketCoordinator(user: AuthenticatedUser) {
+    if (!ticketCoordinatorRoles.includes(user.role as UserRole)) throw new ForbiddenException('Ticket coordinator permissions are required');
   }
 
   private assertTicketIsNotClosed(ticket: Pick<Ticket, 'status'>) {

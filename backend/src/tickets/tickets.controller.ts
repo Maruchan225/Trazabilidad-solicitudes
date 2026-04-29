@@ -24,7 +24,7 @@ export class TicketsController {
   }
 
   @Post()
-  @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE)
+  @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE, UserRole.SECRETARY)
   createTicket(@Body() dto: CreateTicketDto, @CurrentUser() user: AuthenticatedUser) {
     return this.ticketsService.createTicket(dto, user);
   }
@@ -35,7 +35,7 @@ export class TicketsController {
   }
 
   @Patch(':id/assign')
-  @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE)
+  @Roles(UserRole.MANAGER, UserRole.SUBSTITUTE, UserRole.SECRETARY)
   assignTicket(@Param('id') id: string, @Body() dto: AssignTicketDto, @CurrentUser() user: AuthenticatedUser) {
     return this.ticketsService.assignTicket(id, dto, user);
   }

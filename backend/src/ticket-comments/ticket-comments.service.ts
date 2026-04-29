@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketCommentDto } from './dto/create-ticket-comment.dto';
 import { UpdateTicketCommentDto } from './dto/update-ticket-comment.dto';
 
-const managerRoles: UserRole[] = [UserRole.MANAGER, UserRole.SUBSTITUTE];
+const fullTicketAccessRoles: UserRole[] = [UserRole.MANAGER, UserRole.SUBSTITUTE, UserRole.SECRETARY];
 
 @Injectable()
 export class TicketCommentsService {
@@ -133,7 +133,7 @@ export class TicketCommentsService {
   }
 
   private isManager(user: AuthenticatedUser) {
-    return managerRoles.includes(user.role as UserRole);
+    return fullTicketAccessRoles.includes(user.role as UserRole);
   }
 
   private assertTicketIsNotClosed(ticket: Pick<Ticket, 'status'>) {

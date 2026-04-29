@@ -40,6 +40,8 @@ export const ticketsService = {
   },
   getTicket: (id: string) => request<Ticket>(`/tickets/${id}`),
   createTicket: (payload: CreateTicketPayload) => request<Ticket>('/tickets', { method: 'POST', body: payload }),
+  assignTicket: (id: string, assignedToId: string) =>
+    request<Ticket>(`/tickets/${id}/assign`, { method: 'PATCH', body: { assignedToId } }),
   changeStatus: (id: string, status: TicketStatus, observation?: string) =>
     request<Ticket>(`/tickets/${id}/status`, { method: 'PATCH', body: { status, observation } }),
   finishTicket: (id: string) => request<Ticket>(`/tickets/${id}/finish`, { method: 'PATCH' }),

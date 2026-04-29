@@ -6,14 +6,29 @@ import { useAuth } from '../auth/useAuth';
 import { Icon } from '../components/Icon';
 import { ModulePage } from '../components/ModulePage';
 import { PriorityTag, StatusTag } from '../components/StatusTags';
-import { attachmentsService, commentsService, ticketsService } from '../services/api';
-import type { Ticket, TicketAttachment, TicketComment, TicketHistory, TicketStatus } from '../types/domain';
-import { inputChannelLabels, isManagementRole, statusLabels } from '../types/domain';
+import { attachmentsService, commentsService, ticketsService, usersService } from '../services/api';
+import type { Ticket, TicketAttachment, TicketComment, TicketHistory, TicketStatus, User } from '../types/domain';
+import { canResolveTickets, inputChannelLabels, isManagementRole, isTicketCoordinatorRole, statusLabels } from '../types/domain';
 import { dueStatusColors } from '../utils/colors';
 import { formatDate, formatDateTime, formatFileSize } from '../utils/formatters';
 import { getTicketDueStatus } from '../utils/tickets';
 
 type Columns<T> = NonNullable<TableProps<T>['columns']>;
+
+const historyActionLabels: Record<string, string> = {
+  CREATED: 'Creacion',
+  UPDATED: 'Actualizacion',
+  ASSIGNED: 'Reasignacion',
+  DERIVED: 'Derivacion',
+  STATUS_CHANGED: 'Cambio de estado',
+  COMMENT_ADDED: 'Observacion agregada',
+  ATTACHMENT_ADDED: 'Adjunto agregado',
+  SLA_UPDATED: 'SLA actualizado',
+  DUE_DATE_UPDATED: 'Fecha de vencimiento actualizada',
+  FINISHED: 'Finalizacion',
+  CLOSED: 'Cierre',
+  REOPENED: 'Reapertura',
+};
 
 function describeHistory(item: TicketHistory) {
   const actor = item.user?.name ?? 'Sistema';
@@ -39,10 +54,13 @@ export function TicketDetailPage() {
   const { session } = useAuth();
   const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? '/tickets';
   const canManage = isManagementRole(session?.user.role);
+  const canCoordinateTickets = isTicketCoordinatorRole(session?.user.role);
+  const canResolve = canResolveTickets(session?.user.role);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [history, setHistory] = useState<TicketHistory[]>([]);
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [reopenModalOpen, setReopenModalOpen] = useState(false);
   const [commentForm] = Form.useForm();
@@ -53,6 +71,9 @@ export function TicketDetailPage() {
   const statusOptions = Object.entries(statusLabels)
     .filter(([value]) => !['FINISHED', 'CLOSED'].includes(value))
     .map(([value, label]) => ({ value, label }));
+  const workerOptions = users
+    .filter((user) => user.enabled && user.role === 'WORKER')
+    .map((user) => ({ value: user.id, label: `${user.name} - ${user.rut ?? user.email}` }));
 
   async function loadTicketDetail() {
     if (!id) return;
@@ -77,6 +98,10 @@ export function TicketDetailPage() {
     void loadTicketDetail();
   }, [id]);
 
+  useEffect(() => {
+    if (canCoordinateTickets) void usersService.listUsers().then(setUsers);
+  }, [canCoordinateTickets]);
+
   async function changeStatus(status: TicketStatus) {
     if (!id) return;
     await ticketsService.changeStatus(id, status);
@@ -92,6 +117,12 @@ export function TicketDetailPage() {
   async function closeTicket() {
     if (!id) return;
     await ticketsService.closeTicket(id);
+    await loadTicketDetail();
+  }
+
+  async function assignTicket(assignedToId: string) {
+    if (!id) return;
+    await ticketsService.assignTicket(id, assignedToId);
     await loadTicketDetail();
   }
 
@@ -153,7 +184,7 @@ export function TicketDetailPage() {
             extra={
               ticket ? (
                 <Space wrap>
-                  {!isClosed && !isFinished ? (
+                  {canResolve && !isClosed && !isFinished ? (
                     <>
                       <Select<TicketStatus>
                         className="status-select"
@@ -166,6 +197,17 @@ export function TicketDetailPage() {
                   ) : null}
                   {canManage && isFinished ? <Button onClick={() => setReopenModalOpen(true)}>Reabrir</Button> : null}
                   {canManage && isFinished ? <Button danger onClick={confirmCloseTicket}>Cerrar</Button> : null}
+                  {canCoordinateTickets && !isClosed ? (
+                    <Select
+                      showSearch
+                      className="status-select"
+                      optionFilterProp="label"
+                      placeholder="Asignar responsable"
+                      value={ticket.assignedToId}
+                      options={workerOptions}
+                      onChange={(assignedToId) => void assignTicket(assignedToId)}
+                    />
+                  ) : null}
                 </Space>
               ) : null
             }
@@ -227,7 +269,7 @@ export function TicketDetailPage() {
                 {history.map((item) => (
                   <div className="history-entry" key={item.id}>
                     <div className="history-entry-header">
-                      <Typography.Text strong>{item.action}</Typography.Text>
+                      <Typography.Text strong>{historyActionLabels[item.action] ?? item.action}</Typography.Text>
                       <Typography.Text type="secondary">{formatDateTime(item.createdAt)}</Typography.Text>
                     </div>
                     <Typography.Paragraph className="history-entry-copy">{describeHistory(item)}</Typography.Paragraph>

@@ -4,7 +4,7 @@ import { AuthenticatedUser } from '../auth/current-user.decorator';
 import { NEAR_DUE_DAYS } from '../common/constants/sla.constants';
 import { PrismaService } from '../prisma/prisma.service';
 
-const managerRoles: UserRole[] = [UserRole.MANAGER, UserRole.SUBSTITUTE];
+const fullTicketAccessRoles: UserRole[] = [UserRole.MANAGER, UserRole.SUBSTITUTE, UserRole.SECRETARY];
 const terminalStatuses: TicketStatus[] = [TicketStatus.FINISHED, TicketStatus.CLOSED];
 
 @Injectable()
@@ -198,6 +198,6 @@ export class DashboardService {
   }
 
   private isManager(user: AuthenticatedUser) {
-    return managerRoles.includes(user.role as UserRole);
+    return fullTicketAccessRoles.includes(user.role as UserRole);
   }
 }

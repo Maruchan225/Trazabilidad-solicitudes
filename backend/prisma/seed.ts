@@ -139,12 +139,13 @@ async function seedUsers(passwordHash: string) {
   const fixedUsers = [
     { name: 'Encargado Demo', rut: '11.111.111-1', email: 'encargado@demo.cl', role: UserRole.MANAGER },
     { name: 'Subrogante Demo', rut: '22.222.222-2', email: 'subrogante@demo.cl', role: UserRole.SUBSTITUTE },
-    { name: 'Trabajador Uno', rut: '33.333.333-3', email: featuredWorkerEmail, role: UserRole.WORKER },
-    { name: 'Trabajador Dos', rut: '44.444.444-4', email: 'trabajador.dos@demo.cl', role: UserRole.WORKER },
+    { name: 'Secretaria Demo', rut: '33.333.333-3', email: 'secretaria@demo.cl', role: UserRole.SECRETARY },
+    { name: 'Trabajador Uno', rut: '44.444.444-4', email: featuredWorkerEmail, role: UserRole.WORKER },
+    { name: 'Trabajador Dos', rut: '55.555.555-5', email: 'trabajador.dos@demo.cl', role: UserRole.WORKER },
   ];
 
-  const generatedUsers = Array.from({ length: 96 }, (_, index) => {
-    const number = index + 5;
+  const generatedUsers = Array.from({ length: 95 }, (_, index) => {
+    const number = index + 6;
     const role = number <= 8 ? UserRole.SUBSTITUTE : UserRole.WORKER;
     return {
       name: role === UserRole.WORKER ? `Trabajador Demo ${String(number).padStart(3, '0')}` : `Subrogante Demo ${String(number).padStart(3, '0')}`,
